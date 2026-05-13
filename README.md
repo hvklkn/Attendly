@@ -2,7 +2,7 @@
 
 Attendly is a multi-tenant QR attendance and participation management SaaS scaffolded with Next.js App Router, TypeScript, and Tailwind CSS.
 
-This initial architecture focuses on route organization, layout foundations, shared UI primitives, and placeholder pages. Auth, Prisma, QR scanning, attendance workflows, and reporting logic are intentionally left for later increments.
+This initial architecture focuses on route organization, layout foundations, shared UI primitives, Prisma domain modeling, and an auth/session foundation. QR scanning, attendance workflows, and reporting logic are intentionally left for later increments.
 
 ## Project Shape
 
@@ -11,3 +11,17 @@ This initial architecture focuses on route organization, layout foundations, sha
 - `app/(admin)`, `app/(instructor)`, and `app/(student)` contain role-oriented application areas.
 - `components` contains reusable layout and UI foundations.
 - `config`, `constants`, `lib`, and `types` hold shared product configuration and low-level helpers.
+
+## Local Database Bootstrap
+
+1. Copy `.env.example` to `.env` and set `DATABASE_URL`.
+2. Run `npm run prisma:migrate`.
+3. Run `npm run prisma:seed`.
+
+The seed creates one organization and three development users:
+
+- `admin@attendly.local`
+- `instructor@attendly.local`
+- `student@attendly.local`
+
+Default password: `AttendlyDev123!`

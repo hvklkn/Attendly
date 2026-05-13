@@ -1,14 +1,20 @@
 import type { ReactNode } from "react";
 import { AppSidebar } from "@/components/layout/AppSidebar";
 import { AppTopbar } from "@/components/layout/AppTopbar";
+import type { AuthContext } from "@/types/auth";
 import type { RoleNavigation } from "@/types/navigation";
 
 type DashboardShellProps = {
   navigation: RoleNavigation;
+  authContext?: AuthContext;
   children: ReactNode;
 };
 
-export function DashboardShell({ navigation, children }: DashboardShellProps) {
+export function DashboardShell({
+  navigation,
+  authContext,
+  children,
+}: DashboardShellProps) {
   return (
     <div className="min-h-screen bg-neutral-50 text-neutral-950">
       <AppSidebar
@@ -18,7 +24,7 @@ export function DashboardShell({ navigation, children }: DashboardShellProps) {
         className="hidden lg:flex"
       />
       <div className="lg:pl-72">
-        <AppTopbar areaLabel={navigation.label} />
+        <AppTopbar areaLabel={navigation.label} authContext={authContext} />
         <div className="border-b border-neutral-200 bg-white px-4 py-3 sm:px-6 lg:hidden">
           <AppSidebar
             areaLabel={navigation.label}
