@@ -1,11 +1,12 @@
 import "server-only";
 
+import { cache } from "react";
 import { OrganizationStatus, UserStatus } from "@/lib/generated/prisma/enums";
 import { db } from "@/lib/db";
 import { getSessionCookieValue, hashSessionToken } from "@/lib/auth/session";
 import type { AuthContext } from "@/types/auth";
 
-export async function getCurrentAuthContext(): Promise<AuthContext | null> {
+export const getCurrentAuthContext = cache(async (): Promise<AuthContext | null> => {
   const token = await getSessionCookieValue();
 
   if (!token) {
@@ -85,7 +86,7 @@ export async function getCurrentAuthContext(): Promise<AuthContext | null> {
       expiresAt: deviceSession.expiresAt,
     },
   };
-}
+});
 
 export async function getCurrentOrganizationMembershipContext() {
   const authContext = await getCurrentAuthContext();

@@ -18,41 +18,8 @@ import { SectionCard } from "@/components/ui/SectionCard";
 import { StatCard } from "@/components/ui/StatCard";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { routes } from "@/constants/routes";
-
-const overviewStats = [
-  {
-    label: "Active sessions",
-    value: "3",
-    trend: "Today",
-    description: "Live or scheduled check-ins prepared for the day.",
-    icon: <CalendarDays className="h-4 w-4" aria-hidden="true" />,
-    tone: "info" as const,
-  },
-  {
-    label: "Attendance rate",
-    value: "91%",
-    trend: "Mock",
-    description: "Placeholder average for completed sessions.",
-    icon: <CheckCircle2 className="h-4 w-4" aria-hidden="true" />,
-    tone: "success" as const,
-  },
-  {
-    label: "Members",
-    value: "128",
-    trend: "Demo",
-    description: "Seed-ready count for admins, instructors, and students.",
-    icon: <Users className="h-4 w-4" aria-hidden="true" />,
-    tone: "neutral" as const,
-  },
-  {
-    label: "Needs review",
-    value: "5",
-    trend: "Open",
-    description: "Attendance exceptions awaiting admin review.",
-    icon: <AlertTriangle className="h-4 w-4" aria-hidden="true" />,
-    tone: "warning" as const,
-  },
-];
+import { requireAdminAuthContext } from "@/lib/admin/auth";
+import { getAdminDashboardData } from "@/lib/admin/queries";
 
 const quickActions = [
   {
@@ -75,36 +42,6 @@ const quickActions = [
   },
 ];
 
-const upcomingSessions = [
-  {
-    title: "Data Structures Lab",
-    section: "CS-204 A",
-    time: "09:30",
-    room: "Engineering 204",
-    status: "Scheduled",
-  },
-  {
-    title: "Corporate Onboarding",
-    section: "May Cohort",
-    time: "13:00",
-    room: "Training Room 2",
-    status: "Ready",
-  },
-  {
-    title: "Product Analytics",
-    section: "Evening Academy",
-    time: "18:00",
-    room: "Remote",
-    status: "Draft",
-  },
-];
-
-const recentActivity = [
-  "Instructor role assigned to a demo member",
-  "Attendance report placeholder generated",
-  "Session draft created for CS-204 A",
-];
-
 const platformStatus = [
   { label: "Auth boundary", status: "Ready", tone: "success" as const },
   { label: "Prisma schema", status: "Ready", tone: "success" as const },
@@ -112,11 +49,67 @@ const platformStatus = [
   { label: "Reports engine", status: "Planned", tone: "warning" as const },
 ];
 
-export default function AdminDashboardPage() {
+function formatDateTime(date: Date) {
+  return new Intl.DateTimeFormat("en", {
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(date);
+}
+
+function formatStatus(status: string) {
+  return status.replaceAll("_", " ");
+}
+
+function getSessionTone(status: string) {
+  if (status === "ACTIVE") return "success" as const;
+  if (status === "DRAFT") return "warning" as const;
+  if (status === "CANCELLED") return "danger" as const;
+  return "info" as const;
+}
+
+export default async function AdminDashboardPage() {
+  const authContext = await requireAdminAuthContext();
+  const data = await getAdminDashboardData(authContext);
+
+  const overviewStats = [
+    {
+      label: "Total sessions",
+      value: String(data.totalSessions),
+      trend: "All time",
+      description: "Attendance sessions scoped to this organization.",
+      icon: <CalendarDays className="h-4 w-4" aria-hidden="true" />,
+      tone: "info" as const,
+    },
+    {
+      label: "Upcoming sessions",
+      value: String(data.upcomingSessionsCount),
+      trend: "Scheduled",
+      description: "Future sessions not yet closed or cancelled.",
+      icon: <Clock3 className="h-4 w-4" aria-hidden="true" />,
+      tone: "neutral" as const,
+    },
+    {
+      label: "Members",
+      value: String(data.totalMembers),
+      trend: "Active tenant",
+      description: "Membership records in the current organization.",
+      icon: <Users className="h-4 w-4" aria-hidden="true" />,
+      tone: "neutral" as const,
+    },
+    {
+      label: "Attendance rate",
+      value: data.attendanceRate === null ? "--" : `${data.attendanceRate}%`,
+      trend: data.totalAttendanceRecords > 0 ? "Recorded" : "No records",
+      description: "Present, late, and manual records over total records.",
+      icon: <CheckCircle2 className="h-4 w-4" aria-hidden="true" />,
+      tone: "success" as const,
+    },
+  ];
+
   return (
     <>
       <PageHeader
-        eyebrow="Admin workspace"
+        eyebrow={authContext.activeOrganization.name}
         title="Dashboard"
         description="Operational overview for sessions, people, reports, and workspace readiness."
       >
@@ -138,7 +131,7 @@ export default function AdminDashboardPage() {
       <section className="grid gap-6 xl:grid-cols-[1.35fr_0.65fr]">
         <SectionCard
           title="Upcoming sessions"
-          description="Prepared session list placeholder for the next operating window."
+          description="Next scheduled sessions for the active organization."
           actions={
             <ButtonLink
               href={routes.admin.sessions}
@@ -149,42 +142,64 @@ export default function AdminDashboardPage() {
             </ButtonLink>
           }
         >
-          <div className="divide-y divide-neutral-100">
-            {upcomingSessions.map((session) => (
-              <div
-                key={`${session.title}-${session.time}`}
-                className="grid gap-3 py-4 first:pt-0 last:pb-0 md:grid-cols-[1fr_110px_150px_100px] md:items-center"
-              >
-                <div>
-                  <p className="font-medium text-neutral-950">
-                    {session.title}
+          {data.upcomingSessions.length > 0 ? (
+            <div className="divide-y divide-neutral-100">
+              {data.upcomingSessions.map((session) => (
+                <div
+                  key={session.id}
+                  className="grid gap-3 py-4 first:pt-0 last:pb-0 md:grid-cols-[1fr_170px_150px_120px] md:items-center"
+                >
+                  <div>
+                    <p className="font-medium text-neutral-950">
+                      {session.title}
+                    </p>
+                    <p className="mt-1 text-sm text-neutral-500">
+                      {session.section.course.code} · {session.section.name}
+                    </p>
+                  </div>
+                  <p className="text-sm text-neutral-600">
+                    {formatDateTime(session.startTime)}
                   </p>
-                  <p className="mt-1 text-sm text-neutral-500">
-                    {session.section}
+                  <p className="text-sm text-neutral-600">
+                    {session.room?.name ?? "No room"}
                   </p>
+                  <StatusBadge
+                    label={formatStatus(session.status)}
+                    tone={getSessionTone(session.status)}
+                  />
                 </div>
-                <p className="text-sm text-neutral-600">{session.time}</p>
-                <p className="text-sm text-neutral-600">{session.room}</p>
-                <StatusBadge
-                  label={session.status}
-                  tone={session.status === "Ready" ? "success" : "info"}
-                />
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          ) : (
+            <EmptyState
+              title="No upcoming sessions"
+              description="Future attendance sessions will appear here after they are created."
+              icon={<CalendarDays className="h-5 w-5" aria-hidden="true" />}
+              actionHref={routes.admin.sessionCreate}
+              actionLabel="Create session"
+            />
+          )}
         </SectionCard>
 
         <SectionCard
           title="Attention needed"
-          description="Review queue placeholder for future operational exceptions."
+          description="Read-only review queue based on attendance records."
         >
-          <EmptyState
-            title="5 records need review"
-            description="Manual corrections, rejected scans, and late exceptions will appear here once attendance workflows are connected."
-            icon={<AlertTriangle className="h-5 w-5" aria-hidden="true" />}
-            actionHref={routes.admin.reports}
-            actionLabel="Open reports"
-          />
+          {data.needsReviewCount > 0 ? (
+            <EmptyState
+              title={`${data.needsReviewCount} records need review`}
+              description="Rejected and manual attendance records are counted here for future review workflows."
+              icon={<AlertTriangle className="h-5 w-5" aria-hidden="true" />}
+              actionHref={routes.admin.reports}
+              actionLabel="Open reports"
+            />
+          ) : (
+            <EmptyState
+              title="No records need review"
+              description="Rejected and manual attendance records will appear here when they exist."
+              icon={<CheckCircle2 className="h-5 w-5" aria-hidden="true" />}
+            />
+          )}
         </SectionCard>
       </section>
 
@@ -216,22 +231,56 @@ export default function AdminDashboardPage() {
 
         <SectionCard
           title="Recent activity"
-          description="Audit-log backed activity will land here later."
+          description="Latest audit log entries scoped to this organization."
           className="lg:col-span-1"
         >
-          <div className="space-y-4">
-            {recentActivity.map((item) => (
-              <div key={item} className="flex gap-3">
-                <div className="mt-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-neutral-100 text-neutral-500">
-                  <Clock3 className="h-4 w-4" aria-hidden="true" />
+          {data.recentAuditLogs.length > 0 ? (
+            <div className="space-y-4">
+              {data.recentAuditLogs.map((item) => (
+                <div key={item.id} className="flex gap-3">
+                  <div className="mt-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-neutral-100 text-neutral-500">
+                    <Clock3 className="h-4 w-4" aria-hidden="true" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-neutral-900">
+                      {item.action}
+                    </p>
+                    <p className="mt-1 text-xs text-neutral-500">
+                      {item.targetType}
+                      {item.targetId ? ` · ${item.targetId}` : ""} ·{" "}
+                      {formatDateTime(item.createdAt)}
+                    </p>
+                  </div>
                 </div>
-                <div>
-                  <p className="text-sm font-medium text-neutral-900">{item}</p>
-                  <p className="mt-1 text-xs text-neutral-500">Demo event</p>
+              ))}
+            </div>
+          ) : data.recentSessions.length > 0 ? (
+            <div className="space-y-4">
+              {data.recentSessions.map((session) => (
+                <div key={session.id} className="flex gap-3">
+                  <div className="mt-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-neutral-100 text-neutral-500">
+                    <CalendarDays className="h-4 w-4" aria-hidden="true" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-neutral-900">
+                      {session.title}
+                    </p>
+                    <p className="mt-1 text-xs text-neutral-500">
+                      {session.section.course.code} · {session.section.name} ·{" "}
+                      {formatDateTime(session.createdAt)}
+                    </p>
+                  </div>
                 </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          ) : (
+            <EmptyState
+              title="No activity yet"
+              description="Audit log events will appear here after admin actions are recorded."
+              icon={<Clock3 className="h-5 w-5" aria-hidden="true" />}
+              className="min-h-40"
+            />
+          )}
         </SectionCard>
 
         <SectionCard

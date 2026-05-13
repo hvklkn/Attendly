@@ -3,36 +3,15 @@ import {
   Clock3,
   KeyRound,
   MapPin,
-  Save,
   ShieldCheck,
   UserRound,
 } from "lucide-react";
-import { ButtonLink } from "@/components/ui/ButtonLink";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { StatusBadge } from "@/components/ui/StatusBadge";
-
-const organizationSettings = [
-  { label: "Organization", value: "Attendly Demo University" },
-  { label: "Slug", value: "demo-university" },
-  { label: "Default timezone", value: "Europe/Istanbul" },
-  { label: "Status", value: "Active" },
-];
-
-const attendanceDefaults = [
-  { label: "Late threshold", value: "10 minutes" },
-  { label: "Default radius", value: "50 meters" },
-  { label: "QR token expiry", value: "2 minutes" },
-  { label: "Manual review", value: "Enabled" },
-];
-
-const securitySettings = [
-  { label: "Session duration", value: "7 days" },
-  { label: "Session storage", value: "DeviceSession" },
-  { label: "Password hashing", value: "scrypt" },
-  { label: "Audit logging", value: "Planned" },
-];
+import { requireAdminAuthContext } from "@/lib/admin/auth";
+import { getAdminSettingsData } from "@/lib/admin/queries";
 
 function SettingsList({
   items,
@@ -54,21 +33,71 @@ function SettingsList({
   );
 }
 
-export default function AdminSettingsPage() {
+function formatDateTime(date: Date) {
+  return new Intl.DateTimeFormat("en", {
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(date);
+}
+
+function formatEnum(value: string) {
+  return value.replaceAll("_", " ");
+}
+
+function getInitials(name: string | null, email: string) {
+  const source = name?.trim() || email;
+  return source
+    .split(/[ @._-]+/)
+    .filter(Boolean)
+    .map((part) => part[0])
+    .join("")
+    .slice(0, 2)
+    .toUpperCase();
+}
+
+function getStatusTone(status: string) {
+  if (status === "ACTIVE") return "success" as const;
+  if (status === "SUSPENDED") return "danger" as const;
+  return "neutral" as const;
+}
+
+export default async function AdminSettingsPage() {
+  const authContext = await requireAdminAuthContext();
+  const data = await getAdminSettingsData(authContext);
+
+  const organizationSettings = [
+    { label: "Organization", value: data.organization.name },
+    { label: "Slug", value: data.organization.slug },
+    { label: "Status", value: formatEnum(data.organization.status) },
+    { label: "Members", value: String(data.memberCount) },
+    { label: "Sessions", value: String(data.sessionCount) },
+  ];
+
+  const attendanceDefaults = [
+    { label: "Late threshold", value: "Configured per session" },
+    { label: "Default radius", value: "Configured per room" },
+    { label: "QR token expiry", value: "Configured per token" },
+    { label: "Manual review", value: "Pending workflow" },
+  ];
+
+  const securitySettings = [
+    { label: "Session storage", value: "DeviceSession" },
+    { label: "Password hashing", value: "scrypt" },
+    { label: "Active device sessions", value: String(data.activeDeviceSessions) },
+    {
+      label: "Current session expires",
+      value: formatDateTime(data.deviceSession.expiresAt),
+    },
+  ];
+
   return (
     <>
       <PageHeader
         eyebrow="Workspace administration"
         title="Settings"
-        description="Organize tenant profile, attendance defaults, account information, and session security foundations."
+        description="Read-only tenant profile, current account context, and session security foundations."
       >
-        <ButtonLink
-          href="/admin/settings"
-          variant="primary"
-          icon={<Save className="h-4 w-4" aria-hidden="true" />}
-        >
-          Save changes
-        </ButtonLink>
+        <StatusBadge label="Read only" tone="info" />
       </PageHeader>
 
       <section className="grid gap-6 xl:grid-cols-[1fr_0.85fr]">
@@ -95,16 +124,21 @@ export default function AdminSettingsPage() {
         >
           <div className="flex items-start gap-4">
             <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-neutral-950 text-sm font-semibold text-white">
-              AD
+              {getInitials(data.user.name, data.user.email)}
             </div>
             <div>
-              <p className="font-semibold text-neutral-950">Admin user</p>
+              <p className="font-semibold text-neutral-950">
+                {data.user.name ?? "Unnamed user"}
+              </p>
               <p className="mt-1 text-sm text-neutral-500">
-                Profile values will come from the authenticated user context.
+                {data.user.email}
               </p>
               <div className="mt-3 flex flex-wrap gap-2">
-                <StatusBadge label="ORG ADMIN" tone="info" />
-                <StatusBadge label="Active" tone="success" />
+                <StatusBadge label={formatEnum(data.role)} tone="info" />
+                <StatusBadge
+                  label={formatEnum(data.user.status)}
+                  tone={getStatusTone(data.user.status)}
+                />
               </div>
             </div>
           </div>
@@ -126,7 +160,7 @@ export default function AdminSettingsPage() {
 
         <SectionCard
           title="Security and sessions"
-          description="Current session model choices and future hardening areas."
+          description="Current session model values and future hardening areas."
           actions={
             <div className="flex h-9 w-9 items-center justify-center rounded-md bg-neutral-100 text-neutral-600">
               <ShieldCheck className="h-4 w-4" aria-hidden="true" />
@@ -149,7 +183,8 @@ export default function AdminSettingsPage() {
                 Time-based rules
               </p>
               <p className="mt-1 text-sm leading-6 text-neutral-600">
-                Late thresholds and QR expiry are ready for real settings.
+                Late thresholds and QR expiry are modeled on session and token
+                records.
               </p>
             </div>
           </div>
@@ -160,7 +195,8 @@ export default function AdminSettingsPage() {
                 Access controls
               </p>
               <p className="mt-1 text-sm leading-6 text-neutral-600">
-                Role-aware route protection is already in place.
+                Role-aware route protection is already backed by membership
+                context.
               </p>
             </div>
           </div>
