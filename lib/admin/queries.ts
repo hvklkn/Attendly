@@ -182,6 +182,176 @@ export async function getAdminSessionsData(
   });
 }
 
+export async function getAdminSessionDetailData(
+  authContext: AdminAuthContext,
+  sessionId: string,
+) {
+  const organizationId = getAdminOrganizationId(authContext);
+
+  const [session, attendanceStatusCounts] = await Promise.all([
+    db.attendanceSession.findFirst({
+      where: {
+        id: sessionId,
+        organizationId,
+      },
+      select: {
+        id: true,
+        title: true,
+        description: true,
+        startTime: true,
+        endTime: true,
+        status: true,
+        lateThresholdMinutes: true,
+        createdAt: true,
+        updatedAt: true,
+        section: {
+          select: {
+            id: true,
+            name: true,
+            code: true,
+            startsAt: true,
+            endsAt: true,
+            isActive: true,
+            course: {
+              select: {
+                id: true,
+                code: true,
+                title: true,
+                description: true,
+              },
+            },
+            instructorMembership: {
+              select: {
+                id: true,
+                role: true,
+                user: {
+                  select: {
+                    name: true,
+                    email: true,
+                  },
+                },
+              },
+            },
+            _count: {
+              select: {
+                enrollments: true,
+              },
+            },
+          },
+        },
+        room: {
+          select: {
+            id: true,
+            name: true,
+            code: true,
+            description: true,
+            address: true,
+            latitude: true,
+            longitude: true,
+            allowedRadiusMeters: true,
+            isActive: true,
+          },
+        },
+        createdByMembership: {
+          select: {
+            id: true,
+            role: true,
+            user: {
+              select: {
+                name: true,
+                email: true,
+              },
+            },
+          },
+        },
+        qrTokens: {
+          orderBy: {
+            createdAt: "desc",
+          },
+          take: 1,
+          select: {
+            id: true,
+            expiresAt: true,
+            revokedAt: true,
+            createdAt: true,
+          },
+        },
+        attendanceRecords: {
+          orderBy: [
+            {
+              checkedInAt: "desc",
+            },
+            {
+              createdAt: "desc",
+            },
+          ],
+          take: 8,
+          select: {
+            id: true,
+            status: true,
+            source: true,
+            checkedInAt: true,
+            createdAt: true,
+            locationAccuracyMeters: true,
+            deviceUserAgent: true,
+            studentUser: {
+              select: {
+                name: true,
+                email: true,
+              },
+            },
+          },
+        },
+        _count: {
+          select: {
+            attendanceRecords: true,
+            qrTokens: true,
+          },
+        },
+      },
+    }),
+    db.attendanceRecord.groupBy({
+      by: ["status"],
+      where: {
+        attendanceSessionId: sessionId,
+        organizationId,
+      },
+      _count: {
+        _all: true,
+      },
+    }),
+  ]);
+
+  if (!session) {
+    return null;
+  }
+
+  const attendanceCountsByStatus = attendanceStatusCounts.reduce<
+    Record<string, number>
+  >((accumulator, item) => {
+    accumulator[item.status] = item._count._all;
+    return accumulator;
+  }, {});
+
+  const attendedRecords =
+    (attendanceCountsByStatus[AttendanceRecordStatus.PRESENT] ?? 0) +
+    (attendanceCountsByStatus[AttendanceRecordStatus.LATE] ?? 0) +
+    (attendanceCountsByStatus[AttendanceRecordStatus.MANUAL] ?? 0);
+
+  const attendanceRate =
+    session._count.attendanceRecords > 0
+      ? Math.round((attendedRecords / session._count.attendanceRecords) * 100)
+      : null;
+
+  return {
+    session,
+    attendanceStatusCounts,
+    attendedRecords,
+    attendanceRate,
+    latestQrToken: session.qrTokens[0] ?? null,
+  };
+}
+
 export async function getAdminUsersData(
   authContext: AdminAuthContext,
   input?: {
