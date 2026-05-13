@@ -24,7 +24,11 @@ export function DashboardShell({
         className="hidden lg:flex"
       />
       <div className="lg:pl-72">
-        <AppTopbar areaLabel={navigation.label} authContext={authContext} />
+        <AppTopbar
+          areaLabel={navigation.label}
+          authContext={authContext}
+          navigationItems={navigation.items}
+        />
         <div className="border-b border-neutral-200 bg-white px-4 py-3 sm:px-6 lg:hidden">
           <AppSidebar
             areaLabel={navigation.label}
@@ -33,7 +37,7 @@ export function DashboardShell({
             variant="mobile"
           />
         </div>
-        <main className="mx-auto flex w-full max-w-6xl flex-col gap-6 px-4 py-6 sm:px-6 lg:px-8">
+        <main className="mx-auto flex w-full max-w-7xl flex-col gap-6 px-4 py-6 sm:px-6 lg:px-8">
           {children}
         </main>
       </div>

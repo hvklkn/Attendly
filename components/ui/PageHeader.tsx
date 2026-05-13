@@ -21,7 +21,7 @@ export function PageHeader({
             {eyebrow}
           </p>
         ) : null}
-        <h1 className="text-3xl font-semibold tracking-normal text-neutral-950">
+        <h1 className="text-2xl font-semibold tracking-normal text-neutral-950 sm:text-3xl">
           {title}
         </h1>
         {description ? (
@@ -30,7 +30,9 @@ export function PageHeader({
           </p>
         ) : null}
       </div>
-      {children ? <div className="flex shrink-0 gap-3">{children}</div> : null}
+      {children ? (
+        <div className="flex shrink-0 flex-wrap gap-3">{children}</div>
+      ) : null}
     </div>
   );
 }

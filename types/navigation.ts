@@ -4,6 +4,7 @@ export type NavigationItem = {
   title: string;
   href: string;
   description?: string;
+  icon?: NavigationIcon;
 };
 
 export type RoleNavigation = {
@@ -12,3 +13,13 @@ export type RoleNavigation = {
   homeHref: string;
   items: NavigationItem[];
 };
+
+export type NavigationIcon =
+  | "dashboard"
+  | "sessions"
+  | "users"
+  | "reports"
+  | "settings"
+  | "scan"
+  | "history"
+  | "profile";
