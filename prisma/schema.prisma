@@ -1,0 +1,343 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../lib/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum MembershipRole {
+  /// MVP keeps SUPER_ADMIN in MembershipRole so platform operators use the same role pipeline.
+  SUPER_ADMIN
+  ORG_ADMIN
+  INSTRUCTOR
+  STUDENT
+}
+
+enum UserStatus {
+  ACTIVE
+  INVITED
+  SUSPENDED
+  ARCHIVED
+}
+
+enum OrganizationStatus {
+  ACTIVE
+  SUSPENDED
+  ARCHIVED
+}
+
+enum AttendanceSessionStatus {
+  DRAFT
+  SCHEDULED
+  ACTIVE
+  CLOSED
+  CANCELLED
+}
+
+enum AttendanceRecordStatus {
+  PRESENT
+  LATE
+  ABSENT
+  EXCUSED
+  REJECTED
+  MANUAL
+}
+
+enum AttendanceSource {
+  QR_SCAN
+  MANUAL_ENTRY
+  SYSTEM_GENERATED
+}
+
+enum EnrollmentStatus {
+  ACTIVE
+  COMPLETED
+  WITHDRAWN
+  SUSPENDED
+}
+
+model Organization {
+  id        String             @id @default(cuid())
+  name      String
+  slug      String             @unique
+  status    OrganizationStatus @default(ACTIVE)
+  createdAt DateTime           @default(now())
+  updatedAt DateTime           @updatedAt
+
+  memberships        Membership[]
+  rooms              Room[]
+  courses            Course[]
+  sections           Section[]
+  enrollments        Enrollment[]
+  attendanceSessions AttendanceSession[]
+  qrTokens           QRToken[]
+  attendanceRecords  AttendanceRecord[]
+  auditLogs          AuditLog[]
+  deviceSessions     DeviceSession[]
+
+  @@index([status])
+  @@map("organizations")
+}
+
+model User {
+  id        String     @id @default(cuid())
+  email     String     @unique
+  name      String?
+  status    UserStatus @default(ACTIVE)
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+
+  memberships       Membership[]
+  auditLogs         AuditLog[]         @relation("AuditLogActor")
+  deviceSessions    DeviceSession[]
+  attendanceRecords AttendanceRecord[] @relation("AttendanceRecordStudentUser")
+
+  @@index([status])
+  @@map("users")
+}
+
+model Membership {
+  id             String         @id @default(cuid())
+  organizationId String
+  userId         String
+  role           MembershipRole
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: NoAction)
+
+  instructedSections        Section[]           @relation("SectionInstructorMembership")
+  enrollments               Enrollment[]        @relation("EnrollmentStudentMembership")
+  createdAttendanceSessions AttendanceSession[] @relation("AttendanceSessionCreatorMembership")
+  createdQRTokens           QRToken[]           @relation("QRTokenCreatorMembership")
+  attendanceRecords         AttendanceRecord[]  @relation("AttendanceRecordStudentMembership")
+
+  @@unique([organizationId, userId])
+  @@unique([id, organizationId])
+  @@unique([id, organizationId, userId])
+  @@index([organizationId, role])
+  @@index([userId])
+  @@map("memberships")
+}
+
+model Room {
+  id                  String   @id @default(cuid())
+  organizationId      String
+  name                String
+  code                String?
+  description         String?
+  address             String?
+  latitude            Decimal? @db.Decimal(9, 6)
+  longitude           Decimal? @db.Decimal(9, 6)
+  allowedRadiusMeters Int?
+  isActive            Boolean  @default(true)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  organization       Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  attendanceSessions AttendanceSession[]
+
+  @@unique([organizationId, code])
+  @@unique([id, organizationId])
+  @@index([organizationId, name])
+  @@map("rooms")
+}
+
+model Course {
+  id             String   @id @default(cuid())
+  organizationId String
+  code           String
+  title          String
+  description    String?
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  sections     Section[]
+
+  @@unique([organizationId, code])
+  @@unique([id, organizationId])
+  @@index([organizationId, isActive])
+  @@map("courses")
+}
+
+model Section {
+  id                     String    @id @default(cuid())
+  organizationId         String
+  courseId               String
+  instructorMembershipId String?
+  name                   String
+  code                   String?
+  startsAt               DateTime?
+  endsAt                 DateTime?
+  isActive               Boolean   @default(true)
+  createdAt              DateTime  @default(now())
+  updatedAt              DateTime  @updatedAt
+
+  organization         Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  course               Course       @relation(fields: [courseId, organizationId], references: [id, organizationId], onDelete: NoAction)
+  instructorMembership Membership?  @relation("SectionInstructorMembership", fields: [instructorMembershipId, organizationId], references: [id, organizationId], onDelete: NoAction)
+
+  enrollments        Enrollment[]
+  attendanceSessions AttendanceSession[]
+
+  @@unique([organizationId, code])
+  @@unique([id, organizationId])
+  @@index([organizationId, courseId])
+  @@index([organizationId, instructorMembershipId])
+  @@index([organizationId, isActive])
+  @@map("sections")
+}
+
+model Enrollment {
+  id                  String           @id @default(cuid())
+  organizationId      String
+  sectionId           String
+  studentMembershipId String
+  status              EnrollmentStatus @default(ACTIVE)
+  enrolledAt          DateTime         @default(now())
+  endedAt             DateTime?
+  createdAt           DateTime         @default(now())
+  updatedAt           DateTime         @updatedAt
+
+  organization      Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  section           Section      @relation(fields: [sectionId, organizationId], references: [id, organizationId], onDelete: NoAction)
+  studentMembership Membership   @relation("EnrollmentStudentMembership", fields: [studentMembershipId, organizationId], references: [id, organizationId], onDelete: NoAction)
+
+  attendanceRecords AttendanceRecord[]
+
+  @@unique([organizationId, sectionId, studentMembershipId])
+  @@unique([id, organizationId])
+  @@index([organizationId, status])
+  @@index([organizationId, studentMembershipId])
+  @@map("enrollments")
+}
+
+model AttendanceSession {
+  id                    String                  @id @default(cuid())
+  organizationId        String
+  sectionId             String
+  roomId                String?
+  createdByMembershipId String?
+  title                 String
+  description           String?
+  startTime             DateTime
+  endTime               DateTime
+  status                AttendanceSessionStatus @default(SCHEDULED)
+  lateThresholdMinutes  Int                     @default(0)
+  createdAt             DateTime                @default(now())
+  updatedAt             DateTime                @updatedAt
+
+  organization        Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  section             Section      @relation(fields: [sectionId, organizationId], references: [id, organizationId], onDelete: NoAction)
+  room                Room?        @relation(fields: [roomId, organizationId], references: [id, organizationId], onDelete: NoAction)
+  createdByMembership Membership?  @relation("AttendanceSessionCreatorMembership", fields: [createdByMembershipId, organizationId], references: [id, organizationId], onDelete: NoAction)
+
+  qrTokens          QRToken[]
+  attendanceRecords AttendanceRecord[]
+
+  @@unique([id, organizationId])
+  @@index([organizationId, status])
+  @@index([organizationId, sectionId, startTime])
+  @@index([organizationId, roomId])
+  @@index([organizationId, createdByMembershipId])
+  @@map("attendance_sessions")
+}
+
+model QRToken {
+  id                    String    @id @default(cuid())
+  organizationId        String
+  attendanceSessionId   String
+  createdByMembershipId String?
+  tokenHash             String    @unique
+  expiresAt             DateTime
+  revokedAt             DateTime?
+  createdAt             DateTime  @default(now())
+
+  organization        Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  attendanceSession   AttendanceSession @relation(fields: [attendanceSessionId, organizationId], references: [id, organizationId], onDelete: Cascade)
+  createdByMembership Membership?       @relation("QRTokenCreatorMembership", fields: [createdByMembershipId, organizationId], references: [id, organizationId], onDelete: NoAction)
+
+  @@index([organizationId, attendanceSessionId, revokedAt, expiresAt])
+  @@index([organizationId, expiresAt])
+  @@map("qr_tokens")
+}
+
+model AttendanceRecord {
+  id                     String                 @id @default(cuid())
+  organizationId         String
+  attendanceSessionId    String
+  studentMembershipId    String
+  studentUserId          String
+  enrollmentId           String?
+  status                 AttendanceRecordStatus
+  source                 AttendanceSource
+  checkedInAt            DateTime?
+  locationLatitude       Decimal?               @db.Decimal(9, 6)
+  locationLongitude      Decimal?               @db.Decimal(9, 6)
+  locationAccuracyMeters Int?
+  deviceIdHash           String?
+  deviceUserAgent        String?
+  ipAddress              String?
+  createdAt              DateTime               @default(now())
+  updatedAt              DateTime               @updatedAt
+
+  organization      Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  attendanceSession AttendanceSession @relation(fields: [attendanceSessionId, organizationId], references: [id, organizationId], onDelete: Cascade)
+  studentMembership Membership        @relation("AttendanceRecordStudentMembership", fields: [studentMembershipId, organizationId, studentUserId], references: [id, organizationId, userId], onDelete: NoAction)
+  studentUser       User              @relation("AttendanceRecordStudentUser", fields: [studentUserId], references: [id], onDelete: NoAction)
+  enrollment        Enrollment?       @relation(fields: [enrollmentId, organizationId], references: [id, organizationId], onDelete: NoAction)
+
+  @@unique([organizationId, attendanceSessionId, studentMembershipId])
+  @@index([organizationId, status])
+  @@index([attendanceSessionId, status])
+  @@index([organizationId, studentUserId, checkedInAt])
+  @@index([organizationId, source])
+  @@map("attendance_records")
+}
+
+model AuditLog {
+  id             String   @id @default(cuid())
+  organizationId String
+  actorUserId    String?
+  action         String
+  targetType     String
+  targetId       String?
+  metadata       Json?
+  createdAt      DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  actorUser    User?        @relation("AuditLogActor", fields: [actorUserId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, createdAt])
+  @@index([organizationId, targetType, targetId])
+  @@index([actorUserId, createdAt])
+  @@map("audit_logs")
+}
+
+model DeviceSession {
+  id               String    @id @default(cuid())
+  organizationId   String
+  userId           String
+  sessionTokenHash String    @unique
+  userAgent        String?
+  ipAddress        String?
+  lastSeenAt       DateTime  @default(now())
+  expiresAt        DateTime
+  revokedAt        DateTime?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: NoAction)
+
+  @@index([organizationId, userId])
+  @@index([userId, expiresAt])
+  @@index([organizationId, expiresAt])
+  @@index([organizationId, lastSeenAt])
+  @@map("device_sessions")
+}
