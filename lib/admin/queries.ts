@@ -3,6 +3,8 @@ import "server-only";
 import {
   AttendanceRecordStatus,
   AttendanceSessionStatus,
+  MembershipRole,
+  UserStatus,
 } from "@/lib/generated/prisma/enums";
 import { getAdminOrganizationId, type AdminAuthContext } from "@/lib/admin/auth";
 import { db } from "@/lib/db";
@@ -349,6 +351,128 @@ export async function getAdminSessionDetailData(
     attendedRecords,
     attendanceRate,
     latestQrToken: session.qrTokens[0] ?? null,
+  };
+}
+
+export async function getAdminSessionCreateOptionsData(
+  authContext: AdminAuthContext,
+) {
+  const organizationId = getAdminOrganizationId(authContext);
+
+  const [courses, sections, rooms, instructors] = await Promise.all([
+    db.course.findMany({
+      where: {
+        organizationId,
+        isActive: true,
+      },
+      orderBy: [
+        {
+          code: "asc",
+        },
+        {
+          title: "asc",
+        },
+      ],
+      select: {
+        id: true,
+        code: true,
+        title: true,
+        _count: {
+          select: {
+            sections: true,
+          },
+        },
+      },
+    }),
+    db.section.findMany({
+      where: {
+        organizationId,
+        isActive: true,
+      },
+      orderBy: [
+        {
+          courseId: "asc",
+        },
+        {
+          name: "asc",
+        },
+      ],
+      select: {
+        id: true,
+        name: true,
+        code: true,
+        courseId: true,
+        course: {
+          select: {
+            code: true,
+            title: true,
+          },
+        },
+        instructorMembership: {
+          select: {
+            id: true,
+            user: {
+              select: {
+                name: true,
+                email: true,
+              },
+            },
+          },
+        },
+        _count: {
+          select: {
+            enrollments: true,
+          },
+        },
+      },
+    }),
+    db.room.findMany({
+      where: {
+        organizationId,
+        isActive: true,
+      },
+      orderBy: {
+        name: "asc",
+      },
+      select: {
+        id: true,
+        name: true,
+        code: true,
+        address: true,
+        allowedRadiusMeters: true,
+      },
+    }),
+    db.membership.findMany({
+      where: {
+        organizationId,
+        role: MembershipRole.INSTRUCTOR,
+        user: {
+          is: {
+            status: UserStatus.ACTIVE,
+          },
+        },
+      },
+      orderBy: {
+        createdAt: "asc",
+      },
+      select: {
+        id: true,
+        role: true,
+        user: {
+          select: {
+            name: true,
+            email: true,
+          },
+        },
+      },
+    }),
+  ]);
+
+  return {
+    courses,
+    sections,
+    rooms,
+    instructors,
   };
 }
 
