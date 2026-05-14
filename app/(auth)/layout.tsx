@@ -14,7 +14,7 @@ export default function AuthLayout({ children }: { children: ReactNode }) {
           href={routes.public.home}
           className="rounded-md px-3 py-2 text-sm font-medium text-neutral-600 hover:bg-neutral-100 hover:text-neutral-950"
         >
-          Back home
+          Ana sayfaya dön
         </Link>
       </header>
       <main className="mx-auto flex min-h-[calc(100vh-4rem)] max-w-lg items-center px-4 py-10 sm:px-6">

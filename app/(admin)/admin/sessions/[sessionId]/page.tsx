@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import {
   ArrowLeft,
+  AlertTriangle,
   CalendarClock,
   CheckCircle2,
   Clock3,
@@ -389,6 +390,23 @@ export default async function AdminSessionDetailPage({
           )}
         </SectionCard>
       </section>
+
+      <SectionCard
+        title="Şüpheli Katılım Kayıtları"
+        description="Kapıdan okutma, ders ortasında ayrılma veya ara kontrol kaçırma gibi durumlar burada incelenecek."
+        actions={
+          <div className="flex h-9 w-9 items-center justify-center rounded-md bg-neutral-100 text-neutral-600">
+            <AlertTriangle className="h-4 w-4" aria-hidden="true" />
+          </div>
+        }
+      >
+        <EmptyState
+          title="İncelenmesi gereken kayıt yok"
+          description="Devamlılık uyarıları üretildiğinde kurum yöneticileri bu alandan takip edecek."
+          icon={<AlertTriangle className="h-5 w-5" aria-hidden="true" />}
+          className="min-h-40"
+        />
+      </SectionCard>
 
       <SectionCard
         title="Son Yoklama Kayıtları"

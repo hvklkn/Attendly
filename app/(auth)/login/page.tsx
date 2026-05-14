@@ -9,6 +9,7 @@ import { getRoleHomePath } from "@/lib/auth/roles";
 type LoginPageProps = {
   searchParams?: Promise<{
     error?: string;
+    registered?: string;
   }>;
 };
 
@@ -23,6 +24,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
 
   const params = await searchParams;
   const hasError = params?.error === "invalid";
+  const hasRegistered = params?.registered === "1";
 
   return (
     <div className="w-full">
@@ -32,11 +34,16 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
         </div>
         <PageHeader
           title="Giriş"
-          description="Demo hesabınızla Attendly çalışma alanına giriş yapın."
+          description="Attendly çalışma alanınıza e-posta ve şifrenizle giriş yapın."
         />
         {hasError ? (
           <div className="mt-6 rounded-md border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
             E-posta veya şifre hatalı.
+          </div>
+        ) : null}
+        {hasRegistered ? (
+          <div className="mt-6 rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
+            Kurum kaydınız oluşturuldu. Giriş yaparak devam edebilirsiniz.
           </div>
         ) : null}
         <form action={loginAction} className="mt-8 space-y-5">

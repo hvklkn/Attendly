@@ -58,6 +58,45 @@ enum EnrollmentStatus {
   SUSPENDED
 }
 
+enum AttendanceVerificationLevel {
+  INITIAL_ONLY
+  MID_SESSION_VERIFIED
+  CONTINUOUSLY_VERIFIED
+  SUSPICIOUS
+  MANUAL_REVIEW
+}
+
+enum PresenceCheckType {
+  INITIAL_CHECK_IN
+  PERIODIC_LOCATION
+  MID_SESSION_QR
+  MANUAL_CHECK
+}
+
+enum PresenceCheckStatus {
+  INSIDE_GEOFENCE
+  OUTSIDE_GEOFENCE
+  LOCATION_UNAVAILABLE
+  QR_NOT_CONFIRMED
+  SUSPICIOUS
+  VERIFIED
+}
+
+enum AttendanceAlertType {
+  LEFT_GEOFENCE
+  MISSED_MID_SESSION_CHECK
+  LOCATION_PERMISSION_LOST
+  SUSPICIOUS_RECHECK
+  DUPLICATE_ATTEMPT
+  MANUAL_REVIEW
+}
+
+enum AttendanceAlertSeverity {
+  LOW
+  MEDIUM
+  HIGH
+}
+
 model Organization {
   id        String             @id @default(cuid())
   name      String
@@ -74,6 +113,8 @@ model Organization {
   attendanceSessions AttendanceSession[]
   qrTokens           QRToken[]
   attendanceRecords  AttendanceRecord[]
+  presenceChecks     PresenceCheck[]
+  attendanceAlerts   AttendanceAlert[]
   auditLogs          AuditLog[]
   deviceSessions     DeviceSession[]
 
@@ -94,6 +135,8 @@ model User {
   auditLogs         AuditLog[]         @relation("AuditLogActor")
   deviceSessions    DeviceSession[]
   attendanceRecords AttendanceRecord[] @relation("AttendanceRecordStudentUser")
+  presenceChecks    PresenceCheck[]    @relation("PresenceCheckStudentUser")
+  attendanceAlerts  AttendanceAlert[]  @relation("AttendanceAlertStudentUser")
 
   @@index([status])
   @@map("users")
@@ -115,6 +158,9 @@ model Membership {
   createdAttendanceSessions AttendanceSession[] @relation("AttendanceSessionCreatorMembership")
   createdQRTokens           QRToken[]           @relation("QRTokenCreatorMembership")
   attendanceRecords         AttendanceRecord[]  @relation("AttendanceRecordStudentMembership")
+  presenceChecks            PresenceCheck[]     @relation("PresenceCheckStudentMembership")
+  attendanceAlerts          AttendanceAlert[]   @relation("AttendanceAlertStudentMembership")
+  resolvedAttendanceAlerts  AttendanceAlert[]   @relation("AttendanceAlertResolverMembership")
 
   @@unique([organizationId, userId])
   @@unique([id, organizationId])
@@ -240,6 +286,8 @@ model AttendanceSession {
 
   qrTokens          QRToken[]
   attendanceRecords AttendanceRecord[]
+  presenceChecks    PresenceCheck[]
+  attendanceAlerts  AttendanceAlert[]
 
   @@unique([id, organizationId])
   @@index([organizationId, status])
@@ -269,7 +317,7 @@ model QRToken {
 }
 
 model AttendanceRecord {
-  id                     String                 @id @default(cuid())
+  id                     String                      @id @default(cuid())
   organizationId         String
   attendanceSessionId    String
   studentMembershipId    String
@@ -277,28 +325,99 @@ model AttendanceRecord {
   enrollmentId           String?
   status                 AttendanceRecordStatus
   source                 AttendanceSource
+  verificationLevel      AttendanceVerificationLevel @default(INITIAL_ONLY)
+  lastVerifiedAt         DateTime?
+  suspiciousFlag         Boolean                     @default(false)
   checkedInAt            DateTime?
-  locationLatitude       Decimal?               @db.Decimal(9, 6)
-  locationLongitude      Decimal?               @db.Decimal(9, 6)
+  locationLatitude       Decimal?                    @db.Decimal(9, 6)
+  locationLongitude      Decimal?                    @db.Decimal(9, 6)
   locationAccuracyMeters Int?
   deviceIdHash           String?
   deviceUserAgent        String?
   ipAddress              String?
-  createdAt              DateTime               @default(now())
-  updatedAt              DateTime               @updatedAt
+  createdAt              DateTime                    @default(now())
+  updatedAt              DateTime                    @updatedAt
 
   organization      Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   attendanceSession AttendanceSession @relation(fields: [attendanceSessionId, organizationId], references: [id, organizationId], onDelete: Cascade)
   studentMembership Membership        @relation("AttendanceRecordStudentMembership", fields: [studentMembershipId, organizationId, studentUserId], references: [id, organizationId, userId], onDelete: NoAction)
   studentUser       User              @relation("AttendanceRecordStudentUser", fields: [studentUserId], references: [id], onDelete: NoAction)
   enrollment        Enrollment?       @relation(fields: [enrollmentId, organizationId], references: [id, organizationId], onDelete: NoAction)
+  presenceChecks    PresenceCheck[]
+  attendanceAlerts  AttendanceAlert[]
 
   @@unique([organizationId, attendanceSessionId, studentMembershipId])
+  @@unique([id, organizationId])
   @@index([organizationId, status])
+  @@index([organizationId, verificationLevel])
+  @@index([organizationId, suspiciousFlag])
   @@index([attendanceSessionId, status])
   @@index([organizationId, studentUserId, checkedInAt])
   @@index([organizationId, source])
   @@map("attendance_records")
+}
+
+model PresenceCheck {
+  id                       String              @id @default(cuid())
+  organizationId           String
+  attendanceSessionId      String
+  attendanceRecordId       String?
+  studentUserId            String
+  studentMembershipId      String
+  checkType                PresenceCheckType
+  status                   PresenceCheckStatus
+  latitude                 Decimal?            @db.Decimal(9, 6)
+  longitude                Decimal?            @db.Decimal(9, 6)
+  accuracyMeters           Int?
+  distanceToGeofenceMeters Decimal?            @db.Decimal(10, 2)
+  checkedAt                DateTime            @default(now())
+  metadata                 Json?
+  createdAt                DateTime            @default(now())
+
+  organization      Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  attendanceSession AttendanceSession @relation(fields: [attendanceSessionId, organizationId], references: [id, organizationId], onDelete: Cascade)
+  attendanceRecord  AttendanceRecord? @relation(fields: [attendanceRecordId, organizationId], references: [id, organizationId], onDelete: NoAction)
+  studentUser       User              @relation("PresenceCheckStudentUser", fields: [studentUserId], references: [id], onDelete: NoAction)
+  studentMembership Membership        @relation("PresenceCheckStudentMembership", fields: [studentMembershipId, organizationId], references: [id, organizationId], onDelete: NoAction)
+
+  @@index([organizationId, attendanceSessionId])
+  @@index([organizationId, studentUserId])
+  @@index([organizationId, checkType])
+  @@index([organizationId, status])
+  @@index([organizationId, checkedAt])
+  @@map("presence_checks")
+}
+
+model AttendanceAlert {
+  id                     String                  @id @default(cuid())
+  organizationId         String
+  attendanceSessionId    String
+  attendanceRecordId     String?
+  studentUserId          String?
+  studentMembershipId    String?
+  alertType              AttendanceAlertType
+  severity               AttendanceAlertSeverity
+  message                String
+  isResolved             Boolean                 @default(false)
+  resolvedByMembershipId String?
+  resolvedAt             DateTime?
+  createdAt              DateTime                @default(now())
+  updatedAt              DateTime                @updatedAt
+
+  organization         Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  attendanceSession    AttendanceSession @relation(fields: [attendanceSessionId, organizationId], references: [id, organizationId], onDelete: Cascade)
+  attendanceRecord     AttendanceRecord? @relation(fields: [attendanceRecordId, organizationId], references: [id, organizationId], onDelete: NoAction)
+  studentUser          User?             @relation("AttendanceAlertStudentUser", fields: [studentUserId], references: [id], onDelete: NoAction)
+  studentMembership    Membership?       @relation("AttendanceAlertStudentMembership", fields: [studentMembershipId, organizationId], references: [id, organizationId], onDelete: NoAction)
+  resolvedByMembership Membership?       @relation("AttendanceAlertResolverMembership", fields: [resolvedByMembershipId, organizationId], references: [id, organizationId], onDelete: NoAction)
+
+  @@index([organizationId, attendanceSessionId])
+  @@index([organizationId, studentUserId])
+  @@index([organizationId, alertType])
+  @@index([organizationId, isResolved])
+  @@index([organizationId, severity, isResolved])
+  @@index([organizationId, createdAt])
+  @@map("attendance_alerts")
 }
 
 model AuditLog {

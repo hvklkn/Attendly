@@ -25,9 +25,15 @@ export function PublicHeader() {
           ))}
           <Link
             href={routes.public.login}
-            className="rounded-md bg-neutral-950 px-4 py-2 font-medium text-white transition hover:bg-neutral-800"
+            className="rounded-md px-3 py-2 font-medium text-neutral-700 transition hover:bg-neutral-100 hover:text-neutral-950"
           >
             Giriş
+          </Link>
+          <Link
+            href={routes.public.register}
+            className="rounded-md bg-neutral-950 px-4 py-2 font-medium text-white transition hover:bg-neutral-800"
+          >
+            Kurum Kaydı
           </Link>
         </nav>
       </div>

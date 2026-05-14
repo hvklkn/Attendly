@@ -5,6 +5,7 @@ export const routes = {
     privacy: "/privacy",
     terms: "/terms",
     login: "/login",
+    register: "/register",
   },
   admin: {
     root: "/admin",

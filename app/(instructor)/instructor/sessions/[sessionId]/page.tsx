@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import {
   ArrowLeft,
+  AlertTriangle,
   CalendarClock,
   CheckCircle2,
   Clock3,
@@ -259,41 +260,60 @@ export default async function InstructorSessionDetailPage({
           )}
         </SectionCard>
 
-        <SectionCard
-          title="Yoklama Özeti"
-          description="Kayıtlı yoklama durumlarının dağılımı."
-          actions={
-            <div className="flex h-9 w-9 items-center justify-center rounded-md bg-neutral-100 text-neutral-600">
-              <CalendarClock className="h-4 w-4" aria-hidden="true" />
-            </div>
-          }
-        >
-          {data.attendanceStatusCounts.length > 0 ? (
-            <div className="divide-y divide-neutral-100">
-              {data.attendanceStatusCounts.map((item) => (
-                <div
-                  key={item.status}
-                  className="flex items-center justify-between gap-3 py-3 first:pt-0 last:pb-0"
-                >
-                  <StatusBadge
-                    label={getAttendanceRecordStatusLabel(item.status)}
-                    tone={getAttendanceTone(item.status)}
-                  />
-                  <span className="text-sm font-semibold text-neutral-950">
-                    {item._count._all}
-                  </span>
-                </div>
-              ))}
-            </div>
-          ) : (
+        <div className="grid gap-6">
+          <SectionCard
+            title="Yoklama Özeti"
+            description="Kayıtlı yoklama durumlarının dağılımı."
+            actions={
+              <div className="flex h-9 w-9 items-center justify-center rounded-md bg-neutral-100 text-neutral-600">
+                <CalendarClock className="h-4 w-4" aria-hidden="true" />
+              </div>
+            }
+          >
+            {data.attendanceStatusCounts.length > 0 ? (
+              <div className="divide-y divide-neutral-100">
+                {data.attendanceStatusCounts.map((item) => (
+                  <div
+                    key={item.status}
+                    className="flex items-center justify-between gap-3 py-3 first:pt-0 last:pb-0"
+                  >
+                    <StatusBadge
+                      label={getAttendanceRecordStatusLabel(item.status)}
+                      tone={getAttendanceTone(item.status)}
+                    />
+                    <span className="text-sm font-semibold text-neutral-950">
+                      {item._count._all}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <EmptyState
+                title="Henüz yoklama kaydı yok"
+                description="Öğrenciler yoklamaya katıldığında durum özeti burada görünecek."
+                icon={<ListChecks className="h-5 w-5" aria-hidden="true" />}
+                className="min-h-40"
+              />
+            )}
+          </SectionCard>
+
+          <SectionCard
+            title="Canlı Uyarılar"
+            description="Öğrenciler ara kontrolde doğrulanmadığında veya yoklama alanı dışına çıktığında burada görünür."
+            actions={
+              <div className="flex h-9 w-9 items-center justify-center rounded-md bg-neutral-100 text-neutral-600">
+                <AlertTriangle className="h-4 w-4" aria-hidden="true" />
+              </div>
+            }
+          >
             <EmptyState
-              title="Henüz yoklama kaydı yok"
-              description="Öğrenciler yoklamaya katıldığında durum özeti burada görünecek."
-              icon={<ListChecks className="h-5 w-5" aria-hidden="true" />}
+              title="Henüz uyarı yok"
+              description="Devamlılık kontrolü ve uyarı üretimi sonraki adımda bağlanacak."
+              icon={<AlertTriangle className="h-5 w-5" aria-hidden="true" />}
               className="min-h-40"
             />
-          )}
-        </SectionCard>
+          </SectionCard>
+        </div>
       </section>
 
       <SectionCard

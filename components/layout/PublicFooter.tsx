@@ -8,6 +8,9 @@ export function PublicFooter() {
       <div className="mx-auto flex max-w-6xl flex-col gap-3 px-4 py-8 text-sm text-neutral-500 sm:flex-row sm:items-center sm:justify-between sm:px-6 lg:px-8">
         <p>{siteConfig.name} yoklama yönetimi.</p>
         <div className="flex gap-4">
+          <Link href={routes.public.register} className="hover:text-neutral-950">
+            Kurum Kaydı
+          </Link>
           <Link href={routes.public.privacy} className="hover:text-neutral-950">
             Gizlilik
           </Link>
