@@ -4,7 +4,6 @@ import {
   CalendarClock,
   CheckCircle2,
   Clock3,
-  KeyRound,
   ListChecks,
   MapPin,
   QrCode,
@@ -20,6 +19,7 @@ import { StatusBadge } from "@/components/ui/StatusBadge";
 import { routes } from "@/constants/routes";
 import { requireAdminAuthContext } from "@/lib/admin/auth";
 import { getAdminSessionDetailData } from "@/lib/admin/queries";
+import { AdminSessionQrTokenPanel } from "./AdminSessionQrTokenPanel";
 
 type AdminSessionDetailPageProps = {
   params: Promise<{
@@ -199,20 +199,6 @@ export default async function AdminSessionDetailPage({
       ]
     : [];
 
-  const qrTokenItems = latestQrToken
-    ? [
-        { label: "Latest token", value: latestQrToken.id },
-        { label: "Created", value: formatDateTime(latestQrToken.createdAt) },
-        { label: "Expires", value: formatDateTime(latestQrToken.expiresAt) },
-        {
-          label: "Revoked",
-          value: latestQrToken.revokedAt
-            ? formatDateTime(latestQrToken.revokedAt)
-            : "No",
-        },
-      ]
-    : [];
-
   const summaryStats = [
     {
       label: "Attendance records",
@@ -335,26 +321,20 @@ export default async function AdminSessionDetailPage({
       </section>
 
       <section className="grid gap-6 xl:grid-cols-[0.85fr_1fr]">
-        <SectionCard
-          title="QR token summary"
-          description="Read-only token history metadata. Token values are never displayed."
-          actions={
-            <div className="flex h-9 w-9 items-center justify-center rounded-md bg-neutral-100 text-neutral-600">
-              <KeyRound className="h-4 w-4" aria-hidden="true" />
-            </div>
+        <AdminSessionQrTokenPanel
+          sessionId={session.id}
+          sessionStatus={session.status}
+          latestToken={
+            latestQrToken
+              ? {
+                  id: latestQrToken.id,
+                  createdAt: latestQrToken.createdAt.toISOString(),
+                  expiresAt: latestQrToken.expiresAt.toISOString(),
+                  revokedAt: latestQrToken.revokedAt?.toISOString() ?? null,
+                }
+              : null
           }
-        >
-          {latestQrToken ? (
-            <DetailList items={qrTokenItems} />
-          ) : (
-            <EmptyState
-              title="No QR tokens recorded"
-              description="Generated QR token metadata will appear here after QR lifecycle work is implemented."
-              icon={<QrCode className="h-5 w-5" aria-hidden="true" />}
-              className="min-h-40"
-            />
-          )}
-        </SectionCard>
+        />
 
         <SectionCard
           title="Attendance summary"

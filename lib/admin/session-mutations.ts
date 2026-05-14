@@ -2,7 +2,14 @@ import "server-only";
 
 import { AttendanceSessionStatus } from "@/lib/generated/prisma/enums";
 import { getAdminOrganizationId, type AdminAuthContext } from "@/lib/admin/auth";
+import { canIssueQrTokenForSessionStatus } from "@/lib/admin/session-qr";
 import { db } from "@/lib/db";
+import {
+  createQrScanUrl,
+  createRawQrToken,
+  getQrTokenExpiresAt,
+  hashQrToken,
+} from "@/lib/qr-tokens";
 import type {
   CreateSessionFormErrors,
   ValidCreateSessionInput,
@@ -17,6 +24,22 @@ export type CreateAdminSessionResult =
       ok: false;
       message: string;
       errors?: CreateSessionFormErrors;
+    };
+
+export type IssueAdminSessionQrTokenResult =
+  | {
+      ok: true;
+      attendanceSessionId: string;
+      tokenId: string;
+      rawToken: string;
+      scanUrl: string;
+      expiresAt: Date;
+      createdAt: Date;
+      revokedPreviousCount: number;
+    }
+  | {
+      ok: false;
+      message: string;
     };
 
 export async function createAdminAttendanceSession(
@@ -115,6 +138,102 @@ export async function createAdminAttendanceSession(
       ok: false,
       message:
         "We could not create the session right now. Please review the form and try again.",
+    };
+  }
+}
+
+export async function issueAdminSessionQrToken(
+  authContext: AdminAuthContext,
+  sessionId: string,
+): Promise<IssueAdminSessionQrTokenResult> {
+  const organizationId = getAdminOrganizationId(authContext);
+  const normalizedSessionId = sessionId.trim();
+
+  if (!normalizedSessionId) {
+    return {
+      ok: false,
+      message: "Select a valid attendance session before issuing a QR token.",
+    };
+  }
+
+  try {
+    const attendanceSession = await db.attendanceSession.findFirst({
+      where: {
+        id: normalizedSessionId,
+        organizationId,
+      },
+      select: {
+        id: true,
+        status: true,
+      },
+    });
+
+    if (!attendanceSession) {
+      return {
+        ok: false,
+        message: "Attendance session was not found.",
+      };
+    }
+
+    if (!canIssueQrTokenForSessionStatus(attendanceSession.status)) {
+      return {
+        ok: false,
+        message:
+          "QR tokens can only be issued for draft, scheduled, or active sessions.",
+      };
+    }
+
+    const rawToken = createRawQrToken();
+    const tokenHash = hashQrToken(rawToken);
+    const createdAt = new Date();
+    const expiresAt = getQrTokenExpiresAt(createdAt);
+
+    const [revokedPreviousTokens, qrToken] = await db.$transaction([
+      db.qRToken.updateMany({
+        where: {
+          organizationId,
+          attendanceSessionId: attendanceSession.id,
+          revokedAt: null,
+          expiresAt: {
+            gt: createdAt,
+          },
+        },
+        data: {
+          revokedAt: createdAt,
+        },
+      }),
+      db.qRToken.create({
+        data: {
+          organizationId,
+          attendanceSessionId: attendanceSession.id,
+          createdByMembershipId: authContext.membership.id,
+          tokenHash,
+          expiresAt,
+          createdAt,
+        },
+        select: {
+          id: true,
+          expiresAt: true,
+          createdAt: true,
+        },
+      }),
+    ]);
+
+    return {
+      ok: true,
+      attendanceSessionId: attendanceSession.id,
+      tokenId: qrToken.id,
+      rawToken,
+      scanUrl: createQrScanUrl(rawToken),
+      expiresAt: qrToken.expiresAt,
+      createdAt: qrToken.createdAt,
+      revokedPreviousCount: revokedPreviousTokens.count,
+    };
+  } catch {
+    return {
+      ok: false,
+      message:
+        "We could not issue a QR token right now. Please try again in a moment.",
     };
   }
 }
