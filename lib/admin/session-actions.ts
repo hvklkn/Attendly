@@ -48,7 +48,9 @@ export async function createAdminSessionAction(
 
   revalidatePath(routes.admin.sessions);
   revalidatePath(routes.admin.dashboard);
-  redirect(`/admin/sessions/${result.sessionId}`);
+  revalidatePath(routes.instructor.sessions);
+  revalidatePath(routes.instructor.dashboard);
+  redirect(`/admin/sessions/${result.sessionId}?created=1`);
 }
 
 export async function issueAdminSessionQrTokenAction(

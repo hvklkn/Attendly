@@ -1,5 +1,6 @@
 import type {
   AttendanceRecordStatus,
+  AttendanceSessionGeofenceSource,
   AttendanceSessionStatus,
   AttendanceSource,
   AttendanceAlertSeverity,
@@ -26,6 +27,16 @@ const attendanceSessionStatusLabels: Record<AttendanceSessionStatus, string> = {
   ACTIVE: "Aktif",
   CLOSED: "Kapandı",
   CANCELLED: "İptal Edildi",
+};
+
+const attendanceSessionGeofenceSourceLabels: Record<
+  AttendanceSessionGeofenceSource,
+  string
+> = {
+  DEVICE: "Cihaz Konumu",
+  ROOM: "Derslik Konumu",
+  MANUAL: "Manuel Konum",
+  NONE: "Tanımsız",
 };
 
 const attendanceRecordStatusLabels: Record<AttendanceRecordStatus, string> = {
@@ -130,6 +141,16 @@ export function getAttendanceSessionStatusLabel(
   return (
     attendanceSessionStatusLabels[status as AttendanceSessionStatus] ??
     status.replaceAll("_", " ")
+  );
+}
+
+export function getAttendanceSessionGeofenceSourceLabel(
+  source: AttendanceSessionGeofenceSource | string,
+) {
+  return (
+    attendanceSessionGeofenceSourceLabels[
+      source as AttendanceSessionGeofenceSource
+    ] ?? source.replaceAll("_", " ")
   );
 }
 

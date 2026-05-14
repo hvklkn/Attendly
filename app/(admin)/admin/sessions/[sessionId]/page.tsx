@@ -22,6 +22,7 @@ import { requireAdminAuthContext } from "@/lib/admin/auth";
 import { getAdminSessionDetailData } from "@/lib/admin/queries";
 import {
   formatDateTimeTr,
+  getAttendanceSessionGeofenceSourceLabel,
   getAttendanceRecordStatusLabel,
   getAttendanceSessionStatusLabel,
   getAttendanceSourceLabel,
@@ -31,6 +32,9 @@ import { AdminSessionQrTokenPanel } from "./AdminSessionQrTokenPanel";
 type AdminSessionDetailPageProps = {
   params: Promise<{
     sessionId: string;
+  }>;
+  searchParams?: Promise<{
+    created?: string | string[];
   }>;
 };
 
@@ -77,6 +81,31 @@ function formatDuration(startTime: Date, endTime: Date) {
   return remainingMinutes > 0
     ? `${hours} sa ${remainingMinutes} dk`
     : `${hours} sa`;
+}
+
+function formatMeters(value: number | null | undefined) {
+  return typeof value === "number" ? `${value} metre` : "Belirtilmedi";
+}
+
+function formatDecimalMeters(
+  value: { toString: () => string } | number | null | undefined,
+) {
+  if (value === null || value === undefined) {
+    return "Belirtilmedi";
+  }
+
+  return `${Number(value.toString()).toFixed(0)} metre`;
+}
+
+function formatCoordinates(
+  latitude: { toString: () => string } | null,
+  longitude: { toString: () => string } | null,
+) {
+  if (!latitude || !longitude) {
+    return "Belirtilmedi";
+  }
+
+  return `${latitude.toString()}, ${longitude.toString()}`;
 }
 
 function formatPerson(
@@ -136,8 +165,12 @@ function DetailList({
 
 export default async function AdminSessionDetailPage({
   params,
+  searchParams,
 }: AdminSessionDetailPageProps) {
-  const { sessionId } = await params;
+  const [{ sessionId }, resolvedSearchParams] = await Promise.all([
+    params,
+    searchParams,
+  ]);
   const authContext = await requireAdminAuthContext();
   const data = await getAdminSessionDetailData(authContext, sessionId);
 
@@ -149,6 +182,10 @@ export default async function AdminSessionDetailPage({
   const latestQrToken = data.latestQrToken;
   const instructor = formatPerson(session.section.instructorMembership?.user);
   const creator = formatPerson(session.createdByMembership?.user);
+  const created =
+    (Array.isArray(resolvedSearchParams?.created)
+      ? resolvedSearchParams?.created[0]
+      : resolvedSearchParams?.created) === "1";
   const attendanceRate =
     data.attendanceRate === null ? "--" : `${data.attendanceRate}%`;
 
@@ -179,7 +216,7 @@ export default async function AdminSessionDetailPage({
       value: `${session.section.course.code} · ${session.section.course.title}`,
     },
     {
-      label: "Şube",
+      label: "Ders Grubu",
       value: session.section.code
         ? `${session.section.code} · ${session.section.name}`
         : session.section.name,
@@ -190,7 +227,7 @@ export default async function AdminSessionDetailPage({
       value: String(session.section._count.enrollments),
     },
     {
-      label: "Şube Durumu",
+      label: "Ders Grubu Durumu",
       value: session.section.isActive ? "Aktif" : "Pasif",
     },
   ];
@@ -218,6 +255,42 @@ export default async function AdminSessionDetailPage({
             session.room.latitude && session.room.longitude
               ? `${session.room.latitude.toString()}, ${session.room.longitude.toString()}`
               : "Belirtilmedi",
+        },
+      ]
+    : [];
+  const hasGeofence =
+    session.geofenceLatitude !== null &&
+    session.geofenceLongitude !== null &&
+    session.geofenceRadiusMeters !== null;
+  const geofenceItems = hasGeofence
+    ? [
+        { label: "Yoklama Alanı", value: "Tanımlı" },
+        {
+          label: "Merkez Konum",
+          value: formatCoordinates(
+            session.geofenceLatitude,
+            session.geofenceLongitude,
+          ),
+        },
+        {
+          label: "Yarıçap",
+          value: formatMeters(session.geofenceRadiusMeters),
+        },
+        {
+          label: "Konum Kaynağı",
+          value: getAttendanceSessionGeofenceSourceLabel(
+            session.geofenceSource,
+          ),
+        },
+        {
+          label: "Konum Doğruluğu",
+          value: formatDecimalMeters(session.geofenceAccuracyMeters),
+        },
+        {
+          label: "Konum Alındı",
+          value: session.geofenceCapturedAt
+            ? formatDateTime(session.geofenceCapturedAt)
+            : "Belirtilmedi",
         },
       ]
     : [];
@@ -276,6 +349,12 @@ export default async function AdminSessionDetailPage({
         />
       </PageHeader>
 
+      {created ? (
+        <div className="rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-700">
+          Yoklama oturumu oluşturuldu.
+        </div>
+      ) : null}
+
       <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         {summaryStats.map((stat) => (
           <StatCard key={stat.label} {...stat} />
@@ -308,9 +387,9 @@ export default async function AdminSessionDetailPage({
         </SectionCard>
       </section>
 
-      <section className="grid gap-6 xl:grid-cols-2">
+      <section className="grid gap-6 xl:grid-cols-3">
         <SectionCard
-          title="Ders ve Şube"
+          title="Ders ve Ders Grubu"
           description="Bu oturuma bağlı akademik veya eğitim bağlamı."
           actions={
             <div className="flex h-9 w-9 items-center justify-center rounded-md bg-neutral-100 text-neutral-600">
@@ -336,6 +415,27 @@ export default async function AdminSessionDetailPage({
             <EmptyState
               title="Oda atanmadı"
               description="Oturum bir odaya bağlandığında oda ve konum bilgileri burada görünecek."
+              icon={<MapPin className="h-5 w-5" aria-hidden="true" />}
+              className="min-h-40"
+            />
+          )}
+        </SectionCard>
+
+        <SectionCard
+          title="Konum Doğrulama"
+          description="Öğrenci konumu daha sonra bu yoklama alanıyla karşılaştırılacak."
+          actions={
+            <div className="flex h-9 w-9 items-center justify-center rounded-md bg-neutral-100 text-neutral-600">
+              <MapPin className="h-4 w-4" aria-hidden="true" />
+            </div>
+          }
+        >
+          {hasGeofence ? (
+            <DetailList items={geofenceItems} />
+          ) : (
+            <EmptyState
+              title="Konum doğrulaması tanımlı değil"
+              description="Bu oturumda öğrenci konumu için yoklama alanı henüz saklanmamış."
               icon={<MapPin className="h-5 w-5" aria-hidden="true" />}
               className="min-h-40"
             />

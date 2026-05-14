@@ -3,6 +3,7 @@ import "server-only";
 import {
   AttendanceRecordStatus,
   AttendanceSessionStatus,
+  EnrollmentStatus,
   MembershipRole,
   UserStatus,
 } from "@/lib/generated/prisma/enums";
@@ -20,8 +21,10 @@ export async function getAdminDashboardData(authContext: AdminAuthContext) {
   const now = new Date();
 
   const [
-    totalMembers,
     totalSessions,
+    totalSections,
+    totalInstructors,
+    totalStudents,
     upcomingSessionsCount,
     totalAttendanceRecords,
     attendedRecords,
@@ -30,14 +33,26 @@ export async function getAdminDashboardData(authContext: AdminAuthContext) {
     recentSessions,
     recentAuditLogs,
   ] = await Promise.all([
-    db.membership.count({
+    db.attendanceSession.count({
       where: {
         organizationId,
       },
     }),
-    db.attendanceSession.count({
+    db.section.count({
       where: {
         organizationId,
+      },
+    }),
+    db.membership.count({
+      where: {
+        organizationId,
+        role: MembershipRole.INSTRUCTOR,
+      },
+    }),
+    db.membership.count({
+      where: {
+        organizationId,
+        role: MembershipRole.STUDENT,
       },
     }),
     db.attendanceSession.count({
@@ -129,8 +144,10 @@ export async function getAdminDashboardData(authContext: AdminAuthContext) {
       : null;
 
   return {
-    totalMembers,
     totalSessions,
+    totalSections,
+    totalInstructors,
+    totalStudents,
     upcomingSessionsCount,
     totalAttendanceRecords,
     attendedRecords,
@@ -204,6 +221,12 @@ export async function getAdminSessionDetailData(
         endTime: true,
         status: true,
         lateThresholdMinutes: true,
+        geofenceLatitude: true,
+        geofenceLongitude: true,
+        geofenceAccuracyMeters: true,
+        geofenceRadiusMeters: true,
+        geofenceCapturedAt: true,
+        geofenceSource: true,
         createdAt: true,
         updatedAt: true,
         section: {
@@ -476,7 +499,7 @@ export async function getAdminSessionCreateOptionsData(
   };
 }
 
-export async function getAdminUsersData(
+export async function getAdminSectionsData(
   authContext: AdminAuthContext,
   input?: {
     query?: string;
@@ -485,9 +508,188 @@ export async function getAdminUsersData(
   const organizationId = getAdminOrganizationId(authContext);
   const query = input?.query?.trim();
 
+  return db.section.findMany({
+    where: {
+      organizationId,
+      ...(query
+        ? {
+            OR: [
+              {
+                name: {
+                  contains: query,
+                },
+              },
+              {
+                code: {
+                  contains: query,
+                },
+              },
+              {
+                course: {
+                  is: {
+                    OR: [
+                      {
+                        code: {
+                          contains: query,
+                        },
+                      },
+                      {
+                        title: {
+                          contains: query,
+                        },
+                      },
+                    ],
+                  },
+                },
+              },
+              {
+                instructorMembership: {
+                  is: {
+                    user: {
+                      is: {
+                        OR: [
+                          {
+                            name: {
+                              contains: query,
+                            },
+                          },
+                          {
+                            email: {
+                              contains: query,
+                            },
+                          },
+                        ],
+                      },
+                    },
+                  },
+                },
+              },
+            ],
+          }
+        : {}),
+    },
+    orderBy: [
+      {
+        courseId: "asc",
+      },
+      {
+        name: "asc",
+      },
+    ],
+    take: 100,
+    select: {
+      id: true,
+      name: true,
+      code: true,
+      isActive: true,
+      createdAt: true,
+      course: {
+        select: {
+          id: true,
+          code: true,
+          title: true,
+        },
+      },
+      instructorMembership: {
+        select: {
+          id: true,
+          role: true,
+          user: {
+            select: {
+              name: true,
+              email: true,
+            },
+          },
+        },
+      },
+      _count: {
+        select: {
+          enrollments: true,
+          attendanceSessions: true,
+        },
+      },
+    },
+  });
+}
+
+export async function getAdminSectionCreateOptionsData(
+  authContext: AdminAuthContext,
+) {
+  const organizationId = getAdminOrganizationId(authContext);
+
+  const [courses, instructors] = await Promise.all([
+    db.course.findMany({
+      where: {
+        organizationId,
+        isActive: true,
+      },
+      orderBy: [
+        {
+          code: "asc",
+        },
+        {
+          title: "asc",
+        },
+      ],
+      select: {
+        id: true,
+        code: true,
+        title: true,
+      },
+    }),
+    db.membership.findMany({
+      where: {
+        organizationId,
+        role: MembershipRole.INSTRUCTOR,
+        user: {
+          is: {
+            status: UserStatus.ACTIVE,
+          },
+        },
+      },
+      orderBy: [
+        {
+          user: {
+            name: "asc",
+          },
+        },
+        {
+          createdAt: "asc",
+        },
+      ],
+      select: {
+        id: true,
+        role: true,
+        user: {
+          select: {
+            name: true,
+            email: true,
+          },
+        },
+      },
+    }),
+  ]);
+
+  return {
+    courses,
+    instructors,
+  };
+}
+
+export async function getAdminUsersData(
+  authContext: AdminAuthContext,
+  input?: {
+    query?: string;
+    role?: MembershipRole;
+  },
+) {
+  const organizationId = getAdminOrganizationId(authContext);
+  const query = input?.query?.trim();
+
   return db.membership.findMany({
     where: {
       organizationId,
+      ...(input?.role ? { role: input.role } : {}),
       ...(query
         ? {
             user: {
@@ -538,8 +740,88 @@ export async function getAdminUsersData(
           slug: true,
         },
       },
+      enrollments: {
+        where: {
+          status: EnrollmentStatus.ACTIVE,
+        },
+        select: {
+          id: true,
+          section: {
+            select: {
+              name: true,
+              code: true,
+              course: {
+                select: {
+                  code: true,
+                },
+              },
+            },
+          },
+        },
+        orderBy: {
+          enrolledAt: "desc",
+        },
+        take: 3,
+      },
+      _count: {
+        select: {
+          enrollments: true,
+          instructedSections: true,
+        },
+      },
     },
   });
+}
+
+export async function getAdminUserCreateOptionsData(
+  authContext: AdminAuthContext,
+) {
+  const organizationId = getAdminOrganizationId(authContext);
+
+  const sections = await db.section.findMany({
+    where: {
+      organizationId,
+      isActive: true,
+    },
+    orderBy: [
+      {
+        courseId: "asc",
+      },
+      {
+        name: "asc",
+      },
+    ],
+    select: {
+      id: true,
+      name: true,
+      code: true,
+      course: {
+        select: {
+          code: true,
+          title: true,
+        },
+      },
+      instructorMembership: {
+        select: {
+          user: {
+            select: {
+              name: true,
+              email: true,
+            },
+          },
+        },
+      },
+      _count: {
+        select: {
+          enrollments: true,
+        },
+      },
+    },
+  });
+
+  return {
+    sections,
+  };
 }
 
 export async function getAdminReportsData(authContext: AdminAuthContext) {
@@ -681,6 +963,16 @@ const sessionListSelect = {
         select: {
           code: true,
           title: true,
+        },
+      },
+      instructorMembership: {
+        select: {
+          user: {
+            select: {
+              name: true,
+              email: true,
+            },
+          },
         },
       },
       _count: {

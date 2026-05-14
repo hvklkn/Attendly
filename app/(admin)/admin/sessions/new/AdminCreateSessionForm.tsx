@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useMemo, useState } from "react";
 import { useFormStatus } from "react-dom";
 import {
   BookOpen,
@@ -16,6 +16,9 @@ import { SectionCard } from "@/components/ui/SectionCard";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { createAdminSessionAction } from "@/lib/admin/session-actions";
 import {
+  GEOFENCE_RADIUS_METERS_DEFAULT,
+  GEOFENCE_RADIUS_METERS_MAX,
+  GEOFENCE_RADIUS_METERS_MIN,
   initialCreateSessionActionState,
   LATE_THRESHOLD_MINUTES_MAX,
   LATE_THRESHOLD_MINUTES_MIN,
@@ -23,6 +26,7 @@ import {
   type CreateSessionFormErrors,
   type CreateSessionFormField,
 } from "@/lib/admin/session-create";
+import { AttendanceSessionGeofenceSource } from "@/lib/generated/prisma/enums";
 
 const inputClassName =
   "mt-2 w-full rounded-md border border-neutral-300 bg-white px-3 py-2 text-sm text-neutral-900 outline-none transition placeholder:text-neutral-400 focus:border-neutral-500 disabled:cursor-not-allowed disabled:bg-neutral-50 disabled:text-neutral-500";
@@ -76,13 +80,23 @@ function SubmitButton({ disabled }: { disabled: boolean }) {
       disabled={disabled || pending}
       className="inline-flex h-9 items-center justify-center rounded-md bg-neutral-950 px-4 text-sm font-medium text-white transition hover:bg-neutral-800 disabled:cursor-not-allowed disabled:bg-neutral-200 disabled:text-neutral-500"
     >
-      {pending ? "Oluşturuluyor..." : "Oturum Oluştur"}
+      {pending ? "Oluşturuluyor..." : "Yoklama Oturumu Oluştur"}
     </button>
   );
 }
 
 function formatPerson(user: { name: string | null; email: string }) {
   return user.name ? `${user.name} · ${user.email}` : user.email;
+}
+
+function getGeofenceError(errors: CreateSessionFormErrors) {
+  return (
+    errors.geofenceLatitude ??
+    errors.geofenceLongitude ??
+    errors.geofenceAccuracyMeters ??
+    errors.geofenceRadiusMeters ??
+    errors.geofenceSource
+  );
 }
 
 export function AdminCreateSessionForm({
@@ -101,13 +115,87 @@ export function AdminCreateSessionForm({
   const hasInstructors = options.instructors.length > 0;
   const hasRequiredData = hasCourses && hasSections;
   const { values, errors } = state;
+  const [selectedInstructorMembershipId, setSelectedInstructorMembershipId] =
+    useState(values.instructorMembershipId);
+  const [selectedCourseId, setSelectedCourseId] = useState(values.courseId);
+  const [selectedSectionId, setSelectedSectionId] = useState(values.sectionId);
+  const [geofenceLocation, setGeofenceLocation] = useState({
+    latitude: values.geofenceLatitude,
+    longitude: values.geofenceLongitude,
+    accuracyMeters: values.geofenceAccuracyMeters,
+    source: values.geofenceSource || AttendanceSessionGeofenceSource.NONE,
+  });
+  const [locationMessage, setLocationMessage] = useState<string | null>(null);
+  const [locationError, setLocationError] = useState<string | null>(null);
+  const [isCapturingLocation, setIsCapturingLocation] = useState(false);
+  const hasCapturedLocation = Boolean(
+    geofenceLocation.latitude && geofenceLocation.longitude,
+  );
+  const geofenceError = getGeofenceError(errors);
+  const filteredSections = useMemo(
+    () =>
+      options.sections.filter((section) => {
+        const matchesCourse =
+          !selectedCourseId || section.courseId === selectedCourseId;
+        const matchesInstructor =
+          !selectedInstructorMembershipId ||
+          section.instructorMembership?.id === selectedInstructorMembershipId;
+
+        return matchesCourse && matchesInstructor;
+      }),
+    [options.sections, selectedCourseId, selectedInstructorMembershipId],
+  );
+  const selectedSection =
+    options.sections.find((section) => section.id === selectedSectionId) ??
+    null;
+  const assignedInstructorLabel = selectedSection?.instructorMembership
+    ? formatPerson(selectedSection.instructorMembership.user)
+    : selectedSection
+      ? "Öğretmen henüz atanmadı"
+      : "Ders grubu seçildiğinde görünür";
+
+  function captureDeviceLocation() {
+    setLocationMessage(null);
+    setLocationError(null);
+
+    if (!navigator.geolocation) {
+      setLocationError("Tarayıcınız konum almayı desteklemiyor.");
+      return;
+    }
+
+    setIsCapturingLocation(true);
+
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        setGeofenceLocation({
+          latitude: position.coords.latitude.toFixed(6),
+          longitude: position.coords.longitude.toFixed(6),
+          accuracyMeters: position.coords.accuracy.toFixed(1),
+          source: AttendanceSessionGeofenceSource.DEVICE,
+        });
+        setLocationMessage("Konum alındı.");
+        setIsCapturingLocation(false);
+      },
+      () => {
+        setLocationError(
+          "Konum alınamadı. Lütfen tarayıcı iznini kontrol edip tekrar deneyin.",
+        );
+        setIsCapturingLocation(false);
+      },
+      {
+        enableHighAccuracy: true,
+        maximumAge: 0,
+        timeout: 15000,
+      },
+    );
+  }
 
   return (
     <>
       {!hasRequiredData ? (
         <SectionCard
           title="Ön koşullar eksik"
-          description="Oturum oluşturmak için aktif bir şube gerekir."
+          description="Oturum oluşturmak için aktif ders / kurs ve ders grubu gerekir."
         >
           <div className="grid gap-4 md:grid-cols-2">
             {!hasCourses ? (
@@ -120,8 +208,8 @@ export function AdminCreateSessionForm({
             ) : null}
             {!hasSections ? (
               <EmptyState
-                title="Aktif şube yok"
-                description="Yoklama oturumlarının liste bağlamı olması için en az bir şubeyi aktif hale getirin."
+                title="Aktif ders grubu yok"
+                description="Yoklama oturumu oluşturmadan önce en az bir ders grubunu aktif hale getirin."
                 icon={<Users className="h-5 w-5" aria-hidden="true" />}
                 className="min-h-40"
               />
@@ -189,7 +277,7 @@ export function AdminCreateSessionForm({
 
           <SectionCard
             title="Ders İlişkisi"
-            description="Oturumun bağlı olduğu ders ve şubeyi seçin."
+            description="Oturumun bağlı olduğu öğretmen, ders ve ders grubunu seçin."
             actions={
               <div className="flex h-9 w-9 items-center justify-center rounded-md bg-neutral-100 text-neutral-600">
                 <BookOpen className="h-4 w-4" aria-hidden="true" />
@@ -198,16 +286,57 @@ export function AdminCreateSessionForm({
           >
             <div className="grid gap-5 md:grid-cols-2">
               <Field
+                id="instructor-membership-id"
+                label="Öğretmen"
+                description="Seçilen öğretmenin ders grupları listelenir."
+                error={getFieldError(errors, "instructorMembershipId")}
+              >
+                <select
+                  id="instructor-membership-id"
+                  name="instructorMembershipId"
+                  disabled={!hasInstructors}
+                  value={selectedInstructorMembershipId}
+                  onChange={(event) => {
+                    setSelectedInstructorMembershipId(event.target.value);
+                    setSelectedSectionId("");
+                  }}
+                  aria-invalid={Boolean(
+                    getFieldError(errors, "instructorMembershipId"),
+                  )}
+                  aria-describedby={
+                    getFieldError(errors, "instructorMembershipId")
+                      ? "instructor-membership-id-error"
+                      : undefined
+                  }
+                  className={selectClassName}
+                >
+                  <option value="">
+                    {hasInstructors ? "Tüm öğretmenler" : "Öğretmen yok"}
+                  </option>
+                  {options.instructors.map((membership) => (
+                    <option key={membership.id} value={membership.id}>
+                      {formatPerson(membership.user)}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+
+              <Field
                 id="course-id"
-                label="Ders"
-                description="Geçerli şemada şube, oturumun asıl ilişkisidir."
+                label="Ders / Kurs"
+                description="Ders grubu seçimi sunucuda ders ile eşleştirilir."
                 error={getFieldError(errors, "courseId")}
               >
                 <select
                   id="course-id"
                   name="courseId"
+                  required
                   disabled={!hasCourses}
-                  defaultValue={values.courseId}
+                  value={selectedCourseId}
+                  onChange={(event) => {
+                    setSelectedCourseId(event.target.value);
+                    setSelectedSectionId("");
+                  }}
                   aria-invalid={Boolean(getFieldError(errors, "courseId"))}
                   aria-describedby={
                     getFieldError(errors, "courseId")
@@ -217,7 +346,7 @@ export function AdminCreateSessionForm({
                   className={selectClassName}
                 >
                   <option value="" disabled>
-                    Ders seçin
+                    Ders / kurs seçin
                   </option>
                   {options.courses.map((course) => (
                     <option key={course.id} value={course.id}>
@@ -229,8 +358,8 @@ export function AdminCreateSessionForm({
 
               <Field
                 id="section-id"
-                label="Şube"
-                description="Oluşturma işlemi şubenin bu kuruma ait olduğunu doğrular."
+                label="Ders Grubu"
+                description="Seçilen ders grubu atanmış öğretmen üzerinden öğretmen panelinde görünecek."
                 error={getFieldError(errors, "sectionId")}
               >
                 <select
@@ -238,7 +367,10 @@ export function AdminCreateSessionForm({
                   name="sectionId"
                   required
                   disabled={!hasSections}
-                  defaultValue={values.sectionId}
+                  value={selectedSectionId}
+                  onChange={(event) => {
+                    setSelectedSectionId(event.target.value);
+                  }}
                   aria-invalid={Boolean(getFieldError(errors, "sectionId"))}
                   aria-describedby={
                     getFieldError(errors, "sectionId")
@@ -248,38 +380,36 @@ export function AdminCreateSessionForm({
                   className={selectClassName}
                 >
                   <option value="" disabled>
-                    Şube seçin
+                    Ders grubu seçin
                   </option>
-                  {options.sections.map((section) => (
+                  {filteredSections.map((section) => (
                     <option key={section.id} value={section.id}>
                       {section.course.code} · {section.name} ·{" "}
-                      {section._count.enrollments} kayıtlı
+                      {section.instructorMembership
+                        ? formatPerson(section.instructorMembership.user)
+                        : "Öğretmen henüz atanmadı"}{" "}
+                      · {section._count.enrollments} kayıtlı
                     </option>
                   ))}
                 </select>
               </Field>
 
-              <Field
-                id="instructor-membership-id"
-                label="Öğretmen"
-                description="Şubeler öğretmen atamasını zaten taşır; bu alan ilerideki doğrulama için hazır tutulur."
-              >
-                <select
-                  id="instructor-membership-id"
-                  disabled={!hasInstructors}
-                  defaultValue=""
-                  className={selectClassName}
-                >
-                  <option value="">
-                    {hasInstructors ? "Şube öğretmenini kullan" : "Öğretmen yok"}
-                  </option>
-                  {options.instructors.map((membership) => (
-                    <option key={membership.id} value={membership.id}>
-                      {formatPerson(membership.user)}
-                    </option>
-                  ))}
-                </select>
-              </Field>
+              <div className="rounded-md border border-neutral-200 bg-neutral-50 p-4">
+                <p className="text-sm font-medium text-neutral-700">
+                  Atanmış Öğretmen
+                </p>
+                <p className="mt-2 text-sm font-semibold text-neutral-950">
+                  {assignedInstructorLabel}
+                </p>
+                <p className="mt-2 text-xs leading-5 text-neutral-500">
+                  Bu oturum atanmış öğretmenin panelinde görünecek.
+                </p>
+                {filteredSections.length === 0 ? (
+                  <p className="mt-3 text-xs leading-5 text-amber-700">
+                    Bu öğretmene ait ders grubu bulunamadı.
+                  </p>
+                ) : null}
+              </div>
             </div>
           </SectionCard>
 
@@ -365,8 +495,8 @@ export function AdminCreateSessionForm({
           </SectionCard>
 
           <SectionCard
-            title="Konum"
-            description="Oda seçimi isteğe bağlıdır; seçildiğinde konum doğrulaması için temel hazırlar."
+            title="Konum Doğrulama Alanı"
+            description="Öğrencilerin yoklamaya katılabilmesi için bu alanın içinde olması gerekir."
             actions={
               <div className="flex h-9 w-9 items-center justify-center rounded-md bg-neutral-100 text-neutral-600">
                 <MapPin className="h-4 w-4" aria-hidden="true" />
@@ -374,10 +504,31 @@ export function AdminCreateSessionForm({
             }
           >
             <div className="grid gap-5">
+              <input
+                type="hidden"
+                name="geofenceLatitude"
+                value={geofenceLocation.latitude}
+              />
+              <input
+                type="hidden"
+                name="geofenceLongitude"
+                value={geofenceLocation.longitude}
+              />
+              <input
+                type="hidden"
+                name="geofenceAccuracyMeters"
+                value={geofenceLocation.accuracyMeters}
+              />
+              <input
+                type="hidden"
+                name="geofenceSource"
+                value={geofenceLocation.source}
+              />
+
               <Field
                 id="room-id"
                 label="Oda"
-                description="Yarıçap ve oda bilgileri sonraki yoklama doğrulamasında kullanılacak."
+                description="Oda seçimi isteğe bağlıdır; yoklama alanının merkezi cihaz konumundan alınır."
                 error={getFieldError(errors, "roomId")}
               >
                 <select
@@ -405,6 +556,122 @@ export function AdminCreateSessionForm({
                   ))}
                 </select>
               </Field>
+
+              <div className="grid gap-4 rounded-lg border border-neutral-200 bg-neutral-50 p-4 md:grid-cols-[1fr_auto] md:items-start">
+                <div>
+                  <p className="text-sm font-medium text-neutral-900">
+                    Cihaz Konumumu Al
+                  </p>
+                  <p className="mt-1 text-sm leading-6 text-neutral-600">
+                    Konum izni yalnızca butona bastığınızda istenir. Alınan
+                    merkez konum bu oturumun yoklama alanı olarak saklanır.
+                  </p>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {hasCapturedLocation ? (
+                      <StatusBadge label="Konum alındı" tone="success" />
+                    ) : (
+                      <StatusBadge label="Konum bekleniyor" tone="warning" />
+                    )}
+                    {geofenceLocation.accuracyMeters ? (
+                      <StatusBadge
+                        label={`Doğruluk: ${Math.round(
+                          Number(geofenceLocation.accuracyMeters),
+                        )} m`}
+                        tone="info"
+                      />
+                    ) : null}
+                  </div>
+                  {locationMessage ? (
+                    <p className="mt-3 text-sm text-emerald-700">
+                      {locationMessage}
+                    </p>
+                  ) : null}
+                  {locationError ? (
+                    <p className="mt-3 text-sm text-rose-700">
+                      {locationError}
+                    </p>
+                  ) : null}
+                  {geofenceError ? (
+                    <p className="mt-3 text-sm text-rose-700">
+                      {geofenceError}
+                    </p>
+                  ) : null}
+                </div>
+                <button
+                  type="button"
+                  disabled={isCapturingLocation || !hasRequiredData}
+                  onClick={captureDeviceLocation}
+                  className="inline-flex h-9 items-center justify-center gap-2 rounded-md border border-neutral-300 bg-white px-3 text-sm font-medium text-neutral-700 transition hover:border-neutral-400 hover:text-neutral-950 disabled:cursor-not-allowed disabled:border-neutral-200 disabled:bg-neutral-100 disabled:text-neutral-400"
+                >
+                  <MapPin className="h-4 w-4" aria-hidden="true" />
+                  {isCapturingLocation
+                    ? "Konum alınıyor..."
+                    : "İzin Ver ve Konumu Al"}
+                </button>
+              </div>
+
+              {hasCapturedLocation ? (
+                <div className="rounded-md border border-neutral-200 bg-white p-4">
+                  <p className="text-sm font-medium text-neutral-900">
+                    Merkez Konum
+                  </p>
+                  <p className="mt-2 break-all text-sm text-neutral-600">
+                    {geofenceLocation.latitude}, {geofenceLocation.longitude}
+                  </p>
+                </div>
+              ) : null}
+
+              <Field
+                id="geofence-radius-meters"
+                label="Yoklama alanı yarıçapı"
+                description={`${GEOFENCE_RADIUS_METERS_MIN} ile ${GEOFENCE_RADIUS_METERS_MAX} metre arasında bir değer kullanın. Varsayılan ${GEOFENCE_RADIUS_METERS_DEFAULT} metredir.`}
+                error={getFieldError(errors, "geofenceRadiusMeters")}
+              >
+                <input
+                  id="geofence-radius-meters"
+                  name="geofenceRadiusMeters"
+                  type="number"
+                  min={GEOFENCE_RADIUS_METERS_MIN}
+                  max={GEOFENCE_RADIUS_METERS_MAX}
+                  step="1"
+                  list="geofence-radius-options"
+                  defaultValue={values.geofenceRadiusMeters}
+                  disabled={!hasRequiredData}
+                  aria-invalid={Boolean(
+                    getFieldError(errors, "geofenceRadiusMeters"),
+                  )}
+                  aria-describedby={
+                    getFieldError(errors, "geofenceRadiusMeters")
+                      ? "geofence-radius-meters-error"
+                      : undefined
+                  }
+                  className={inputClassName}
+                />
+                <datalist id="geofence-radius-options">
+                  <option value="25" label="25 m" />
+                  <option value="50" label="50 m" />
+                  <option value="100" label="100 m" />
+                  <option value="150" label="150 m" />
+                </datalist>
+              </Field>
+
+              <label className="flex items-start gap-3 rounded-md border border-amber-200 bg-amber-50 p-4">
+                <input
+                  name="allowWithoutGeofence"
+                  type="checkbox"
+                  defaultChecked={values.allowWithoutGeofence === "on"}
+                  className="mt-1 h-4 w-4 rounded border-amber-300 text-neutral-950 focus:ring-amber-500"
+                />
+                <span>
+                  <span className="block text-sm font-medium text-amber-950">
+                    Konum doğrulamasız oluştur
+                  </span>
+                  <span className="mt-1 block text-sm leading-6 text-amber-900">
+                    Konum doğrulaması olmayan oturumlarda öğrencinin sınıfta
+                    olup olmadığı kontrol edilemez.
+                  </span>
+                </span>
+              </label>
 
               {!hasRooms ? (
                 <EmptyState
@@ -452,7 +719,7 @@ export function AdminCreateSessionForm({
               </div>
               <div className="flex items-center justify-between gap-3">
                 <span className="text-sm font-medium text-neutral-700">
-                  Şubeler
+                  Ders Grupları
                 </span>
                 <StatusBadge
                   label={String(options.sections.length)}
@@ -491,7 +758,7 @@ export function AdminCreateSessionForm({
               </div>
               <div className="flex gap-3">
                 <BookOpen className="mt-1 h-4 w-4 shrink-0 text-neutral-500" />
-                <p>Şube sahipliği bu kurum üzerinden kontrol edilir.</p>
+                <p>Ders grubu sahipliği bu kurum üzerinden kontrol edilir.</p>
               </div>
               <div className="flex gap-3">
                 <MapPin className="mt-1 h-4 w-4 shrink-0 text-neutral-500" />

@@ -1,6 +1,19 @@
+import { AttendanceSessionGeofenceSource } from "@/lib/generated/prisma/enums";
+
 export const LATE_THRESHOLD_MINUTES_DEFAULT = 10;
 export const LATE_THRESHOLD_MINUTES_MIN = 0;
 export const LATE_THRESHOLD_MINUTES_MAX = 180;
+export const GEOFENCE_RADIUS_METERS_DEFAULT = 50;
+export const GEOFENCE_RADIUS_METERS_MIN = 10;
+export const GEOFENCE_RADIUS_METERS_MAX = 500;
+export const GEOFENCE_RADIUS_OPTIONS = [25, 50, 100, 150] as const;
+
+const GEOFENCE_SOURCES = [
+  AttendanceSessionGeofenceSource.DEVICE,
+  AttendanceSessionGeofenceSource.ROOM,
+  AttendanceSessionGeofenceSource.MANUAL,
+  AttendanceSessionGeofenceSource.NONE,
+] as const;
 
 export type AdminSessionCreateOptionsData = {
   courses: Array<{
@@ -51,12 +64,19 @@ export type AdminSessionCreateOptionsData = {
 export type CreateSessionFormValues = {
   title: string;
   description: string;
+  instructorMembershipId: string;
   courseId: string;
   sectionId: string;
   roomId: string;
   startTime: string;
   endTime: string;
   lateThresholdMinutes: string;
+  geofenceLatitude: string;
+  geofenceLongitude: string;
+  geofenceAccuracyMeters: string;
+  geofenceRadiusMeters: string;
+  geofenceSource: string;
+  allowWithoutGeofence: string;
 };
 
 export type CreateSessionFormField = keyof CreateSessionFormValues;
@@ -68,12 +88,19 @@ export type CreateSessionFormErrors = Partial<
 export type ValidCreateSessionInput = {
   title: string;
   description: string | null;
+  instructorMembershipId: string | null;
   courseId: string | null;
   sectionId: string;
   roomId: string | null;
   startTime: Date;
   endTime: Date;
   lateThresholdMinutes: number;
+  geofenceLatitude: number | null;
+  geofenceLongitude: number | null;
+  geofenceAccuracyMeters: number | null;
+  geofenceRadiusMeters: number | null;
+  geofenceSource: AttendanceSessionGeofenceSource;
+  geofenceCapturedAt: Date | null;
 };
 
 export type CreateSessionActionState = {
@@ -86,12 +113,19 @@ export type CreateSessionActionState = {
 export const initialCreateSessionFormValues: CreateSessionFormValues = {
   title: "",
   description: "",
+  instructorMembershipId: "",
   courseId: "",
   sectionId: "",
   roomId: "",
   startTime: "",
   endTime: "",
   lateThresholdMinutes: String(LATE_THRESHOLD_MINUTES_DEFAULT),
+  geofenceLatitude: "",
+  geofenceLongitude: "",
+  geofenceAccuracyMeters: "",
+  geofenceRadiusMeters: String(GEOFENCE_RADIUS_METERS_DEFAULT),
+  geofenceSource: AttendanceSessionGeofenceSource.NONE,
+  allowWithoutGeofence: "",
 };
 
 export const initialCreateSessionActionState: CreateSessionActionState = {
@@ -115,12 +149,20 @@ export function getCreateSessionFormValues(
   return {
     title: getFormValue(formData, "title"),
     description: getFormValue(formData, "description"),
+    instructorMembershipId: getFormValue(formData, "instructorMembershipId"),
     courseId: getFormValue(formData, "courseId"),
     sectionId: getFormValue(formData, "sectionId"),
     roomId: getFormValue(formData, "roomId"),
     startTime: getFormValue(formData, "startTime"),
     endTime: getFormValue(formData, "endTime"),
     lateThresholdMinutes: getFormValue(formData, "lateThresholdMinutes"),
+    geofenceLatitude: getFormValue(formData, "geofenceLatitude"),
+    geofenceLongitude: getFormValue(formData, "geofenceLongitude"),
+    geofenceAccuracyMeters: getFormValue(formData, "geofenceAccuracyMeters"),
+    geofenceRadiusMeters: getFormValue(formData, "geofenceRadiusMeters"),
+    geofenceSource: getFormValue(formData, "geofenceSource"),
+    allowWithoutGeofence:
+      formData.get("allowWithoutGeofence") === "on" ? "on" : "",
   };
 }
 
@@ -134,6 +176,24 @@ function parseDateTimeLocal(value: string) {
   const date = new Date(trimmedValue);
 
   return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function parseOptionalNumber(value: string) {
+  const trimmedValue = value.trim();
+
+  if (!trimmedValue) {
+    return null;
+  }
+
+  const numberValue = Number(trimmedValue);
+
+  return Number.isFinite(numberValue) ? numberValue : Number.NaN;
+}
+
+function isGeofenceSource(
+  value: string,
+): value is AttendanceSessionGeofenceSource {
+  return GEOFENCE_SOURCES.some((source) => source === value);
 }
 
 export function validateCreateSessionFormValues(
@@ -151,6 +211,7 @@ export function validateCreateSessionFormValues(
 
   const title = values.title.trim();
   const description = values.description.trim();
+  const instructorMembershipId = values.instructorMembershipId.trim();
   const courseId = values.courseId.trim();
   const sectionId = values.sectionId.trim();
   const roomId = values.roomId.trim();
@@ -161,13 +222,38 @@ export function validateCreateSessionFormValues(
     lateThresholdValue === ""
       ? LATE_THRESHOLD_MINUTES_DEFAULT
       : Number(lateThresholdValue);
+  const geofenceLatitude = parseOptionalNumber(values.geofenceLatitude);
+  const geofenceLongitude = parseOptionalNumber(values.geofenceLongitude);
+  const geofenceAccuracyMeters = parseOptionalNumber(
+    values.geofenceAccuracyMeters,
+  );
+  const geofenceRadiusValue = values.geofenceRadiusMeters.trim();
+  const geofenceRadiusMeters =
+    geofenceRadiusValue === ""
+      ? null
+      : Number(values.geofenceRadiusMeters);
+  const allowWithoutGeofence = values.allowWithoutGeofence === "on";
+  const hasLatitude = values.geofenceLatitude.trim() !== "";
+  const hasLongitude = values.geofenceLongitude.trim() !== "";
+  const hasGeofenceLocation = hasLatitude || hasLongitude;
+  const geofenceSourceValue = values.geofenceSource.trim();
+  const rawGeofenceSource = hasGeofenceLocation
+    ? geofenceSourceValue || AttendanceSessionGeofenceSource.DEVICE
+    : AttendanceSessionGeofenceSource.NONE;
+  const geofenceSource = isGeofenceSource(rawGeofenceSource)
+    ? rawGeofenceSource
+    : AttendanceSessionGeofenceSource.NONE;
 
   if (!title) {
     errors.title = "Oturum başlığı girin.";
   }
 
+  if (!courseId) {
+    errors.courseId = "Ders / kurs seçilmelidir.";
+  }
+
   if (!sectionId) {
-    errors.sectionId = "Bir şube seçin.";
+    errors.sectionId = "Ders grubu seçilmelidir.";
   }
 
   if (!values.startTime.trim()) {
@@ -195,6 +281,70 @@ export function validateCreateSessionFormValues(
     errors.lateThresholdMinutes = `${LATE_THRESHOLD_MINUTES_MIN} ile ${LATE_THRESHOLD_MINUTES_MAX} dakika arasında bir değer kullanın.`;
   }
 
+  if (!hasGeofenceLocation && !allowWithoutGeofence) {
+    errors.geofenceLatitude =
+      "Cihaz konumunuzu alın veya konum doğrulamasız oluşturma seçeneğini işaretleyin.";
+  }
+
+  if (hasLatitude !== hasLongitude) {
+    errors.geofenceLatitude = "Enlem ve boylam birlikte gönderilmelidir.";
+    errors.geofenceLongitude = "Enlem ve boylam birlikte gönderilmelidir.";
+  }
+
+  if (
+    hasLatitude &&
+    (geofenceLatitude === null || Number.isNaN(geofenceLatitude))
+  ) {
+    errors.geofenceLatitude = "Geçerli bir enlem değeri alınamadı.";
+  } else if (
+    typeof geofenceLatitude === "number" &&
+    (geofenceLatitude < -90 || geofenceLatitude > 90)
+  ) {
+    errors.geofenceLatitude = "Enlem -90 ile 90 arasında olmalıdır.";
+  }
+
+  if (
+    hasLongitude &&
+    (geofenceLongitude === null || Number.isNaN(geofenceLongitude))
+  ) {
+    errors.geofenceLongitude = "Geçerli bir boylam değeri alınamadı.";
+  } else if (
+    typeof geofenceLongitude === "number" &&
+    (geofenceLongitude < -180 || geofenceLongitude > 180)
+  ) {
+    errors.geofenceLongitude = "Boylam -180 ile 180 arasında olmalıdır.";
+  }
+
+  if (
+    geofenceAccuracyMeters !== null &&
+    (Number.isNaN(geofenceAccuracyMeters) || geofenceAccuracyMeters < 0)
+  ) {
+    errors.geofenceAccuracyMeters =
+      "Konum doğruluğu sıfır veya pozitif olmalıdır.";
+  }
+
+  if (hasGeofenceLocation) {
+    if (
+      geofenceRadiusMeters === null ||
+      !Number.isInteger(geofenceRadiusMeters)
+    ) {
+      errors.geofenceRadiusMeters =
+        "Yarıçap metre cinsinden tam sayı olmalıdır.";
+    } else if (
+      geofenceRadiusMeters < GEOFENCE_RADIUS_METERS_MIN ||
+      geofenceRadiusMeters > GEOFENCE_RADIUS_METERS_MAX
+    ) {
+      errors.geofenceRadiusMeters = `${GEOFENCE_RADIUS_METERS_MIN} ile ${GEOFENCE_RADIUS_METERS_MAX} metre arasında bir yarıçap seçin.`;
+    }
+
+    if (!isGeofenceSource(rawGeofenceSource)) {
+      errors.geofenceSource = "Geçerli bir konum kaynağı seçin.";
+    } else if (geofenceSource === AttendanceSessionGeofenceSource.NONE) {
+      errors.geofenceSource =
+        "Konum alındığında kaynak cihaz, derslik veya manuel olmalıdır.";
+    }
+  }
+
   if (Object.keys(errors).length > 0 || !startTime || !endTime) {
     return {
       ok: false,
@@ -207,12 +357,27 @@ export function validateCreateSessionFormValues(
     data: {
       title,
       description: description || null,
+      instructorMembershipId: instructorMembershipId || null,
       courseId: courseId || null,
       sectionId,
       roomId: roomId || null,
       startTime,
       endTime,
       lateThresholdMinutes,
+      geofenceLatitude: hasGeofenceLocation ? geofenceLatitude : null,
+      geofenceLongitude: hasGeofenceLocation ? geofenceLongitude : null,
+      geofenceAccuracyMeters:
+        hasGeofenceLocation && geofenceAccuracyMeters !== null
+          ? geofenceAccuracyMeters
+          : null,
+      geofenceRadiusMeters:
+        hasGeofenceLocation && geofenceRadiusMeters !== null
+          ? geofenceRadiusMeters
+          : null,
+      geofenceSource: hasGeofenceLocation
+        ? geofenceSource
+        : AttendanceSessionGeofenceSource.NONE,
+      geofenceCapturedAt: hasGeofenceLocation ? new Date() : null,
     },
   };
 }

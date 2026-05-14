@@ -1,11 +1,13 @@
-import { Filter, Search, UserPlus, Users } from "lucide-react";
+import { FileUp, Search, UserPlus, Users } from "lucide-react";
 import { ButtonLink } from "@/components/ui/ButtonLink";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { StatusBadge } from "@/components/ui/StatusBadge";
+import { routes } from "@/constants/routes";
 import { requireAdminAuthContext } from "@/lib/admin/auth";
 import { getAdminUsersData } from "@/lib/admin/queries";
+import { MembershipRole } from "@/lib/generated/prisma/enums";
 import {
   formatDateTr,
   getRoleLabel,
@@ -15,8 +17,15 @@ import {
 type AdminUsersPageProps = {
   searchParams?: Promise<{
     q?: string | string[];
+    role?: string | string[];
   }>;
 };
+
+const ROLE_FILTER_OPTIONS = [
+  MembershipRole.ORG_ADMIN,
+  MembershipRole.INSTRUCTOR,
+  MembershipRole.STUDENT,
+] as const;
 
 function getSearchValue(value: string | string[] | undefined) {
   if (Array.isArray(value)) {
@@ -35,6 +44,20 @@ function getInitials(name: string | null, email: string) {
     .join("")
     .slice(0, 2)
     .toUpperCase();
+}
+
+function getRoleFilterValue(value: string | string[] | undefined) {
+  const role = getSearchValue(value);
+
+  if (
+    role === MembershipRole.ORG_ADMIN ||
+    role === MembershipRole.INSTRUCTOR ||
+    role === MembershipRole.STUDENT
+  ) {
+    return role;
+  }
+
+  return undefined;
 }
 
 function formatDate(date: Date) {
@@ -67,37 +90,119 @@ function getStatusTone(status: string) {
   return "neutral" as const;
 }
 
+function formatMembershipScope(membership: {
+  role: string;
+  enrollments: Array<{
+    section: {
+      name: string;
+      code: string | null;
+      course: {
+        code: string;
+      };
+    };
+  }>;
+  _count: {
+    enrollments: number;
+    instructedSections: number;
+  };
+}) {
+  if (membership.role === MembershipRole.INSTRUCTOR) {
+    return `${membership._count.instructedSections} ders grubu`;
+  }
+
+  if (membership.role !== MembershipRole.STUDENT) {
+    return "Kurum kapsamı";
+  }
+
+  if (membership.enrollments.length === 0) {
+    return "Ders grubu yok";
+  }
+
+  const visibleSections = membership.enrollments.map((enrollment) => {
+    const section = enrollment.section;
+    const sectionName = section.code
+      ? `${section.code}`
+      : section.name;
+
+    return `${section.course.code} · ${sectionName}`;
+  });
+  const remainingCount = Math.max(
+    membership._count.enrollments - visibleSections.length,
+    0,
+  );
+
+  return remainingCount > 0
+    ? `${visibleSections.join(", ")} +${remainingCount}`
+    : visibleSections.join(", ");
+}
+
 export default async function AdminUsersPage({
   searchParams,
 }: AdminUsersPageProps) {
   const authContext = await requireAdminAuthContext();
   const resolvedSearchParams = await searchParams;
   const query = getSearchValue(resolvedSearchParams?.q).trim();
-  const memberships = await getAdminUsersData(authContext, { query });
+  const role = getRoleFilterValue(resolvedSearchParams?.role);
+  const memberships = await getAdminUsersData(authContext, { query, role });
 
   return (
     <>
       <PageHeader
         eyebrow="Erişim yönetimi"
         title="Kullanıcılar"
-        description="Kurum üyelerini ve rol bazlı erişimlerini görüntüleyin."
+        description="Kurum üyelerini görüntüleyin; yönetici, öğretmen ve öğrenci hesaplarını güvenli şekilde oluşturun."
       >
         <ButtonLink
-          href="/admin/users"
+          href={`${routes.admin.usersNew}?role=ORG_ADMIN`}
+          variant="secondary"
+          icon={<UserPlus className="h-4 w-4" aria-hidden="true" />}
+        >
+          Yönetici Ekle
+        </ButtonLink>
+        <ButtonLink
+          href={`${routes.admin.usersNew}?role=INSTRUCTOR`}
+          variant="secondary"
+          icon={<UserPlus className="h-4 w-4" aria-hidden="true" />}
+        >
+          Öğretmen Ekle
+        </ButtonLink>
+        <ButtonLink
+          href={`${routes.admin.usersNew}?role=STUDENT`}
           variant="primary"
           icon={<UserPlus className="h-4 w-4" aria-hidden="true" />}
         >
-          Kullanıcı Davet Et
+          Öğrenci Ekle
         </ButtonLink>
       </PageHeader>
+
+      <SectionCard
+        title="Toplu Aktarım"
+        description="Öğrenci listesini CSV dosyasıyla toplu olarak aktarabileceksiniz."
+        actions={
+          <button
+            type="button"
+            disabled
+            className="inline-flex h-9 cursor-not-allowed items-center justify-center gap-2 rounded-md border border-neutral-200 bg-neutral-50 px-3 text-sm font-medium text-neutral-400"
+          >
+            <FileUp className="h-4 w-4" aria-hidden="true" />
+            CSV ile Öğrenci Yükle
+          </button>
+        }
+      >
+        <p className="text-sm leading-6 text-neutral-600">
+          CSV aktarımı sonraki adımda eklenecek. Bu temel sayesinde öğrenciler
+          tek tek oluşturulabilir, toplu yükleme aynı üyelik kurallarını
+          kullanacak şekilde hazırlanabilir.
+        </p>
+      </SectionCard>
 
       <SectionCard
         title="Kullanıcı Listesi"
         description="Üyelik kayıtları kullanıcı detayları seçilmeden önce geçerli kurumla sınırlandırılır."
       >
         <form
-          action="/admin/users"
-          className="mb-5 grid gap-3 lg:grid-cols-[1fr_140px_180px_180px]"
+          action={routes.admin.users}
+          className="mb-5 grid gap-3 lg:grid-cols-[1fr_220px_120px]"
         >
           <label className="flex items-center gap-2 rounded-md border border-neutral-300 bg-white px-3 py-2 text-sm text-neutral-500">
             <Search className="h-4 w-4" aria-hidden="true" />
@@ -109,28 +214,27 @@ export default async function AdminUsersPage({
               className="w-full bg-transparent outline-none placeholder:text-neutral-400"
             />
           </label>
+          <label>
+            <span className="sr-only">Rol</span>
+            <select
+              name="role"
+              defaultValue={role ?? ""}
+              className="h-10 w-full rounded-md border border-neutral-300 bg-white px-3 text-sm text-neutral-700 outline-none transition focus:border-neutral-500"
+            >
+              <option value="">Tüm roller</option>
+              {ROLE_FILTER_OPTIONS.map((roleOption) => (
+                <option key={roleOption} value={roleOption}>
+                  {getRoleLabel(roleOption)}
+                </option>
+              ))}
+            </select>
+          </label>
           <button
             type="submit"
-            className="inline-flex items-center justify-center gap-2 rounded-md border border-neutral-300 bg-white px-3 py-2 text-sm font-medium text-neutral-700 transition hover:border-neutral-400 hover:text-neutral-950"
+            className="inline-flex h-10 items-center justify-center gap-2 rounded-md border border-neutral-300 bg-white px-3 text-sm font-medium text-neutral-700 transition hover:border-neutral-400 hover:text-neutral-950"
           >
             <Search className="h-4 w-4" aria-hidden="true" />
             Ara
-          </button>
-          <button
-            type="button"
-            disabled
-            className="inline-flex cursor-not-allowed items-center justify-center gap-2 rounded-md border border-neutral-200 bg-neutral-50 px-3 py-2 text-sm font-medium text-neutral-400"
-          >
-            <Users className="h-4 w-4" aria-hidden="true" />
-            Rol
-          </button>
-          <button
-            type="button"
-            disabled
-            className="inline-flex cursor-not-allowed items-center justify-center gap-2 rounded-md border border-neutral-200 bg-neutral-50 px-3 py-2 text-sm font-medium text-neutral-400"
-          >
-            <Filter className="h-4 w-4" aria-hidden="true" />
-            Durum
           </button>
         </form>
 
@@ -140,8 +244,10 @@ export default async function AdminUsersPage({
               <table className="w-full border-collapse text-left text-sm">
                 <thead className="bg-neutral-50 text-xs font-medium uppercase tracking-normal text-neutral-500">
                   <tr>
-                    <th className="px-4 py-3">Üye</th>
+                    <th className="px-4 py-3">Ad Soyad</th>
+                    <th className="px-4 py-3">E-posta</th>
                     <th className="px-4 py-3">Rol</th>
+                    <th className="px-4 py-3">Ders Grupları</th>
                     <th className="px-4 py-3">Durum</th>
                     <th className="px-4 py-3">Kurum</th>
                     <th className="px-4 py-3">Güncellendi</th>
@@ -162,17 +268,20 @@ export default async function AdminUsersPage({
                             <p className="font-medium text-neutral-950">
                               {membership.user.name ?? "İsimsiz kullanıcı"}
                             </p>
-                            <p className="mt-1 text-xs text-neutral-500">
-                              {membership.user.email}
-                            </p>
                           </div>
                         </div>
+                      </td>
+                      <td className="px-4 py-4 text-neutral-600">
+                        {membership.user.email}
                       </td>
                       <td className="px-4 py-4">
                         <StatusBadge
                           label={formatEnum(membership.role)}
                           tone={getRoleTone(membership.role)}
                         />
+                      </td>
+                      <td className="px-4 py-4 text-neutral-600">
+                        {formatMembershipScope(membership)}
                       </td>
                       <td className="px-4 py-4">
                         <StatusBadge
@@ -222,6 +331,9 @@ export default async function AdminUsersPage({
                           tone={getStatusTone(membership.user.status)}
                         />
                       </div>
+                      <p className="mt-3 text-xs text-neutral-500">
+                        {formatMembershipScope(membership)}
+                      </p>
                       <p className="mt-3 text-xs text-neutral-500">
                         Güncellendi {formatDate(membership.updatedAt)}
                       </p>

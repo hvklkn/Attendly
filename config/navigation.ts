@@ -34,6 +34,12 @@ export const adminNavigation: RoleNavigation = {
       icon: "sessions",
     },
     {
+      title: "Ders Grupları",
+      href: routes.admin.sections,
+      description: "Ders, öğretmen ve öğrenci kapsamı",
+      icon: "sections",
+    },
+    {
       title: "Kullanıcılar",
       href: routes.admin.users,
       description: "Kişileri ve rolleri yönetin",
@@ -70,6 +76,12 @@ export const instructorNavigation: RoleNavigation = {
       href: routes.instructor.sessions,
       description: "Yoklama araçları",
       icon: "sessions",
+    },
+    {
+      title: "Öğrenciler",
+      href: routes.instructor.students,
+      description: "Ders grubu kayıtları",
+      icon: "users",
     },
   ],
 };

@@ -48,6 +48,14 @@ function getSessionTone(status: string) {
   return "info" as const;
 }
 
+function formatPerson(user: { name: string | null; email: string } | null) {
+  if (!user) {
+    return "Öğretmen henüz atanmadı";
+  }
+
+  return user.name ? user.name : user.email;
+}
+
 export default async function AdminSessionsPage({
   searchParams,
 }: AdminSessionsPageProps) {
@@ -130,6 +138,7 @@ export default async function AdminSessionsPage({
                 <thead className="bg-neutral-50 text-xs font-medium uppercase tracking-normal text-neutral-500">
                   <tr>
                     <th className="px-4 py-3">Oturum</th>
+                    <th className="px-4 py-3">Atanmış Öğretmen</th>
                     <th className="px-4 py-3">Oluşturan</th>
                     <th className="px-4 py-3">Oda</th>
                     <th className="px-4 py-3">Başlangıç</th>
@@ -144,6 +153,9 @@ export default async function AdminSessionsPage({
                       session.createdByMembership?.user.name ??
                       session.createdByMembership?.user.email ??
                       "Atanmadı";
+                    const instructor = formatPerson(
+                      session.section.instructorMembership?.user ?? null,
+                    );
 
                     return (
                       <tr key={session.id}>
@@ -155,6 +167,9 @@ export default async function AdminSessionsPage({
                             {session.section.course.code} ·{" "}
                             {session.section.name}
                           </p>
+                        </td>
+                        <td className="px-4 py-4 text-neutral-600">
+                          {instructor}
                         </td>
                         <td className="px-4 py-4 text-neutral-600">
                           {creator}
@@ -196,6 +211,9 @@ export default async function AdminSessionsPage({
                   session.createdByMembership?.user.name ??
                   session.createdByMembership?.user.email ??
                   "Atanmadı";
+                const instructor = formatPerson(
+                  session.section.instructorMembership?.user ?? null,
+                );
 
                 return (
                   <article
@@ -229,6 +247,12 @@ export default async function AdminSessionsPage({
                         <dd className="mt-1 font-medium text-neutral-900">
                           {session._count.attendanceRecords} /{" "}
                           {session.section._count.enrollments}
+                        </dd>
+                      </div>
+                      <div className="col-span-2">
+                        <dt className="text-neutral-500">Atanmış Öğretmen</dt>
+                        <dd className="mt-1 font-medium text-neutral-900">
+                          {instructor}
                         </dd>
                       </div>
                       <div className="col-span-2">

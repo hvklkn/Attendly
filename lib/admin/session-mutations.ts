@@ -1,6 +1,9 @@
 import "server-only";
 
-import { AttendanceSessionStatus } from "@/lib/generated/prisma/enums";
+import {
+  AttendanceSessionStatus,
+  MembershipRole,
+} from "@/lib/generated/prisma/enums";
 import { getAdminOrganizationId, type AdminAuthContext } from "@/lib/admin/auth";
 import { db } from "@/lib/db";
 import {
@@ -37,20 +40,69 @@ export async function createAdminAttendanceSession(
       where: {
         id: input.sectionId,
         organizationId,
-        isActive: true,
       },
       select: {
         id: true,
         courseId: true,
+        isActive: true,
+        instructorMembershipId: true,
+        instructorMembership: {
+          select: {
+            id: true,
+            role: true,
+            userId: true,
+          },
+        },
       },
     });
 
     if (!section) {
       return {
         ok: false,
-        message: "Bu kurumdan aktif bir şube seçin.",
+        message: "Bu ders grubu kurumunuza ait değil.",
         errors: {
-          sectionId: "Bu kurumdan aktif bir şube seçin.",
+          sectionId: "Bu ders grubu kurumunuza ait değil.",
+        },
+      };
+    }
+
+    if (!section.isActive) {
+      return {
+        ok: false,
+        message: "Bu ders grubu aktif değil.",
+        errors: {
+          sectionId: "Aktif bir ders grubu seçin.",
+        },
+      };
+    }
+
+    if (
+      !section.instructorMembership ||
+      section.instructorMembership.role !== MembershipRole.INSTRUCTOR
+    ) {
+      return {
+        ok: false,
+        message:
+          "Bu ders grubuna atanmış öğretmen yok. Yoklama oturumu oluşturmak için önce bir öğretmen atayın.",
+        errors: {
+          sectionId: "Bu ders grubuna atanmış öğretmen yok.",
+        },
+      };
+    }
+
+    const instructorMembership = section.instructorMembership;
+
+    if (
+      input.instructorMembershipId &&
+      input.instructorMembershipId !== section.instructorMembershipId
+    ) {
+      return {
+        ok: false,
+        message: "Seçilen öğretmen ders grubunun atanmış öğretmeni değil.",
+        errors: {
+          instructorMembershipId:
+            "Ders grubuna atanmış öğretmeni seçin.",
+          sectionId: "Ders grubu ve öğretmen eşleşmiyor.",
         },
       };
     }
@@ -58,10 +110,10 @@ export async function createAdminAttendanceSession(
     if (input.courseId && section.courseId !== input.courseId) {
       return {
         ok: false,
-        message: "Seçilen ders seçilen şube ile eşleşmiyor.",
+        message: "Seçilen ders seçilen ders grubu ile eşleşmiyor.",
         errors: {
-          courseId: "Seçilen şubenin bağlı olduğu dersi seçin.",
-          sectionId: "Seçilen ders için bir şube seçin.",
+          courseId: "Seçilen ders grubunun bağlı olduğu dersi seçin.",
+          sectionId: "Seçilen ders için bir ders grubu seçin.",
         },
       };
     }
@@ -95,22 +147,47 @@ export async function createAdminAttendanceSession(
       roomId = room.id;
     }
 
-    const session = await db.attendanceSession.create({
-      data: {
-        organizationId,
-        sectionId: section.id,
-        roomId,
-        createdByMembershipId: authContext.membership.id,
-        title: input.title,
-        description: input.description,
-        startTime: input.startTime,
-        endTime: input.endTime,
-        lateThresholdMinutes: input.lateThresholdMinutes,
-        status: AttendanceSessionStatus.SCHEDULED,
-      },
-      select: {
-        id: true,
-      },
+    const session = await db.$transaction(async (tx) => {
+      const createdSession = await tx.attendanceSession.create({
+        data: {
+          organizationId,
+          sectionId: section.id,
+          roomId,
+          createdByMembershipId: authContext.membership.id,
+          title: input.title,
+          description: input.description,
+          startTime: input.startTime,
+          endTime: input.endTime,
+          lateThresholdMinutes: input.lateThresholdMinutes,
+          geofenceLatitude: input.geofenceLatitude,
+          geofenceLongitude: input.geofenceLongitude,
+          geofenceAccuracyMeters: input.geofenceAccuracyMeters,
+          geofenceRadiusMeters: input.geofenceRadiusMeters,
+          geofenceCapturedAt: input.geofenceCapturedAt,
+          geofenceSource: input.geofenceSource,
+          status: AttendanceSessionStatus.SCHEDULED,
+        },
+        select: {
+          id: true,
+        },
+      });
+
+      await tx.auditLog.create({
+        data: {
+          organizationId,
+          actorUserId: authContext.user.id,
+          action: "attendance_session.created_by_admin_for_instructor",
+          targetType: "AttendanceSession",
+          targetId: createdSession.id,
+          metadata: {
+            sectionId: section.id,
+            instructorMembershipId: instructorMembership.id,
+            instructorUserId: instructorMembership.userId,
+          },
+        },
+      });
+
+      return createdSession;
     });
 
     return {

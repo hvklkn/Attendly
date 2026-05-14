@@ -3,6 +3,7 @@ import "server-only";
 import {
   AttendanceRecordStatus,
   AttendanceSessionStatus,
+  EnrollmentStatus,
 } from "@/lib/generated/prisma/enums";
 import {
   getInstructorOrganizationId,
@@ -36,35 +37,103 @@ export async function getInstructorDashboardData(
 ) {
   const now = new Date();
   const where = getInstructorSessionWhere(authContext);
+  const organizationId = getInstructorOrganizationId(authContext);
 
-  const [totalSessions, upcomingSessionsCount, activeSessionsCount] =
-    await Promise.all([
-      db.attendanceSession.count({
-        where,
-      }),
-      db.attendanceSession.count({
-        where: {
-          ...where,
-          startTime: {
-            gte: now,
-          },
-          status: {
-            in: INSTRUCTOR_ACTIVE_SESSION_STATUSES,
+  const [
+    totalSessions,
+    upcomingSessionsCount,
+    activeSessionsCount,
+    totalSections,
+    distinctStudents,
+    sections,
+  ] = await Promise.all([
+    db.attendanceSession.count({
+      where,
+    }),
+    db.attendanceSession.count({
+      where: {
+        ...where,
+        startTime: {
+          gte: now,
+        },
+        status: {
+          in: INSTRUCTOR_ACTIVE_SESSION_STATUSES,
+        },
+      },
+    }),
+    db.attendanceSession.count({
+      where: {
+        ...where,
+        status: AttendanceSessionStatus.ACTIVE,
+      },
+    }),
+    db.section.count({
+      where: {
+        organizationId,
+        instructorMembershipId: authContext.membership.id,
+      },
+    }),
+    db.enrollment.findMany({
+      where: {
+        organizationId,
+        status: EnrollmentStatus.ACTIVE,
+        section: {
+          is: {
+            instructorMembershipId: authContext.membership.id,
           },
         },
-      }),
-      db.attendanceSession.count({
-        where: {
-          ...where,
-          status: AttendanceSessionStatus.ACTIVE,
+      },
+      distinct: ["studentMembershipId"],
+      select: {
+        studentMembershipId: true,
+      },
+    }),
+    db.section.findMany({
+      where: {
+        organizationId,
+        instructorMembershipId: authContext.membership.id,
+        isActive: true,
+      },
+      orderBy: [
+        {
+          courseId: "asc",
         },
-      }),
-    ]);
+        {
+          name: "asc",
+        },
+      ],
+      take: 6,
+      select: {
+        id: true,
+        name: true,
+        code: true,
+        course: {
+          select: {
+            code: true,
+            title: true,
+          },
+        },
+        _count: {
+          select: {
+            enrollments: {
+              where: {
+                status: EnrollmentStatus.ACTIVE,
+              },
+            },
+            attendanceSessions: true,
+          },
+        },
+      },
+    }),
+  ]);
 
   return {
     totalSessions,
     upcomingSessionsCount,
     activeSessionsCount,
+    totalSections,
+    totalStudents: distinctStudents.length,
+    sections,
   };
 }
 
@@ -126,6 +195,12 @@ export async function getInstructorSessionDetailData(
         endTime: true,
         status: true,
         lateThresholdMinutes: true,
+        geofenceLatitude: true,
+        geofenceLongitude: true,
+        geofenceAccuracyMeters: true,
+        geofenceRadiusMeters: true,
+        geofenceCapturedAt: true,
+        geofenceSource: true,
         createdAt: true,
         updatedAt: true,
         section: {
@@ -239,6 +314,168 @@ export async function getInstructorSessionDetailData(
     attendanceStatusCounts,
     attendedRecords,
     latestQrToken: session.qrTokens[0] ?? null,
+  };
+}
+
+export async function getInstructorStudentsData(
+  authContext: InstructorAuthContext,
+  input?: {
+    query?: string;
+  },
+) {
+  const organizationId = getInstructorOrganizationId(authContext);
+  const query = input?.query?.trim();
+
+  return db.enrollment.findMany({
+    where: {
+      organizationId,
+      section: {
+        is: {
+          instructorMembershipId: authContext.membership.id,
+        },
+      },
+      ...(query
+        ? {
+            OR: [
+              {
+                studentMembership: {
+                  is: {
+                    user: {
+                      is: {
+                        name: {
+                          contains: query,
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+              {
+                studentMembership: {
+                  is: {
+                    user: {
+                      is: {
+                        email: {
+                          contains: query,
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+              {
+                section: {
+                  is: {
+                    name: {
+                      contains: query,
+                    },
+                  },
+                },
+              },
+              {
+                section: {
+                  is: {
+                    course: {
+                      is: {
+                        code: {
+                          contains: query,
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            ],
+          }
+        : {}),
+    },
+    orderBy: [
+      {
+        enrolledAt: "desc",
+      },
+      {
+        createdAt: "desc",
+      },
+    ],
+    take: 100,
+    select: {
+      id: true,
+      status: true,
+      enrolledAt: true,
+      studentMembership: {
+        select: {
+          id: true,
+          role: true,
+          user: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+              status: true,
+            },
+          },
+        },
+      },
+      section: {
+        select: {
+          id: true,
+          name: true,
+          code: true,
+          course: {
+            select: {
+              code: true,
+              title: true,
+            },
+          },
+        },
+      },
+    },
+  });
+}
+
+export async function getInstructorStudentCreateOptionsData(
+  authContext: InstructorAuthContext,
+) {
+  const organizationId = getInstructorOrganizationId(authContext);
+
+  const sections = await db.section.findMany({
+    where: {
+      organizationId,
+      instructorMembershipId: authContext.membership.id,
+      isActive: true,
+    },
+    orderBy: [
+      {
+        courseId: "asc",
+      },
+      {
+        name: "asc",
+      },
+    ],
+    select: {
+      id: true,
+      name: true,
+      code: true,
+      course: {
+        select: {
+          code: true,
+          title: true,
+        },
+      },
+      _count: {
+        select: {
+          enrollments: {
+            where: {
+              status: EnrollmentStatus.ACTIVE,
+            },
+          },
+        },
+      },
+    },
+  });
+
+  return {
+    sections,
   };
 }
 

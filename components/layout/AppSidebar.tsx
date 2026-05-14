@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   BarChart3,
+  BookOpen,
   CalendarDays,
   History,
   LayoutDashboard,
@@ -19,6 +20,7 @@ import type { NavigationIcon, NavigationItem } from "@/types/navigation";
 const navIcons: Record<NavigationIcon, typeof LayoutDashboard> = {
   dashboard: LayoutDashboard,
   sessions: CalendarDays,
+  sections: BookOpen,
   users: Users,
   reports: BarChart3,
   settings: Settings,

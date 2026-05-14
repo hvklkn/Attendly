@@ -4,30 +4,30 @@ import { PageHeader } from "@/components/ui/PageHeader";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { routes } from "@/constants/routes";
 import { requireAdminAuthContext } from "@/lib/admin/auth";
-import { getAdminSessionCreateOptionsData } from "@/lib/admin/queries";
-import { AdminCreateSessionForm } from "@/app/(admin)/admin/sessions/new/AdminCreateSessionForm";
+import { getAdminSectionCreateOptionsData } from "@/lib/admin/queries";
+import { AdminCreateSectionForm } from "@/app/(admin)/admin/sections/new/AdminCreateSectionForm";
 
-export default async function AdminCreateSessionPage() {
+export default async function AdminCreateSectionPage() {
   const authContext = await requireAdminAuthContext();
-  const options = await getAdminSessionCreateOptionsData(authContext);
+  const options = await getAdminSectionCreateOptionsData(authContext);
 
   return (
     <>
       <PageHeader
         eyebrow={authContext.activeOrganization.name}
-        title="Yoklama Oturumu Oluştur"
-        description="Kurum kapsamındaki ders, ders grubu, oda ve öğretmen bilgileriyle yeni yoklama oturumu hazırlayın."
+        title="Ders Grubu Oluştur"
+        description="Ders / kurs, ders grubu ve atanmış öğretmen ilişkisini tanımlayın."
       >
         <ButtonLink
-          href={routes.admin.sessions}
+          href={routes.admin.sections}
           icon={<ArrowLeft className="h-4 w-4" aria-hidden="true" />}
         >
           Geri
         </ButtonLink>
-        <StatusBadge label="Sunucu işlemi" tone="info" />
+        <StatusBadge label="Kurum kapsamlı" tone="info" />
       </PageHeader>
 
-      <AdminCreateSessionForm options={options} />
+      <AdminCreateSectionForm options={options} />
     </>
   );
 }

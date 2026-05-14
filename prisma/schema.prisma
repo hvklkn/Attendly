@@ -36,6 +36,13 @@ enum AttendanceSessionStatus {
   CANCELLED
 }
 
+enum AttendanceSessionGeofenceSource {
+  DEVICE
+  ROOM
+  MANUAL
+  NONE
+}
+
 enum AttendanceRecordStatus {
   PRESENT
   LATE
@@ -265,19 +272,25 @@ model Enrollment {
 }
 
 model AttendanceSession {
-  id                    String                  @id @default(cuid())
-  organizationId        String
-  sectionId             String
-  roomId                String?
-  createdByMembershipId String?
-  title                 String
-  description           String?
-  startTime             DateTime
-  endTime               DateTime
-  status                AttendanceSessionStatus @default(SCHEDULED)
-  lateThresholdMinutes  Int                     @default(0)
-  createdAt             DateTime                @default(now())
-  updatedAt             DateTime                @updatedAt
+  id                     String                          @id @default(cuid())
+  organizationId         String
+  sectionId              String
+  roomId                 String?
+  createdByMembershipId  String?
+  title                  String
+  description            String?
+  startTime              DateTime
+  endTime                DateTime
+  status                 AttendanceSessionStatus         @default(SCHEDULED)
+  lateThresholdMinutes   Int                             @default(0)
+  geofenceLatitude       Decimal?                        @db.Decimal(9, 6)
+  geofenceLongitude      Decimal?                        @db.Decimal(9, 6)
+  geofenceAccuracyMeters Decimal?                        @db.Decimal(10, 2)
+  geofenceRadiusMeters   Int?
+  geofenceCapturedAt     DateTime?
+  geofenceSource         AttendanceSessionGeofenceSource @default(NONE)
+  createdAt              DateTime                        @default(now())
+  updatedAt              DateTime                        @updatedAt
 
   organization        Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   section             Section      @relation(fields: [sectionId, organizationId], references: [id, organizationId], onDelete: NoAction)
@@ -294,6 +307,7 @@ model AttendanceSession {
   @@index([organizationId, sectionId, startTime])
   @@index([organizationId, roomId])
   @@index([organizationId, createdByMembershipId])
+  @@index([organizationId, geofenceSource])
   @@map("attendance_sessions")
 }
 

@@ -22,6 +22,7 @@ import { getInstructorSessionDetailData } from "@/lib/instructor/queries";
 import {
   formatDateTimeTr,
   getAttendanceRecordStatusLabel,
+  getAttendanceSessionGeofenceSourceLabel,
   getAttendanceSessionStatusLabel,
 } from "@/lib/localization";
 import { InstructorSessionQrTokenPanel } from "./InstructorSessionQrTokenPanel";
@@ -48,6 +49,31 @@ function formatDuration(startTime: Date, endTime: Date) {
   return remainingMinutes > 0
     ? `${hours} sa ${remainingMinutes} dk`
     : `${hours} sa`;
+}
+
+function formatMeters(value: number | null | undefined) {
+  return typeof value === "number" ? `${value} metre` : "Belirtilmedi";
+}
+
+function formatDecimalMeters(
+  value: { toString: () => string } | number | null | undefined,
+) {
+  if (value === null || value === undefined) {
+    return "Belirtilmedi";
+  }
+
+  return `${Number(value.toString()).toFixed(0)} metre`;
+}
+
+function formatCoordinates(
+  latitude: { toString: () => string } | null,
+  longitude: { toString: () => string } | null,
+) {
+  if (!latitude || !longitude) {
+    return "Belirtilmedi";
+  }
+
+  return `${latitude.toString()}, ${longitude.toString()}`;
 }
 
 function getSessionTone(status: string) {
@@ -145,6 +171,42 @@ export default async function InstructorSessionDetailPage({
         {
           label: "Oda Durumu",
           value: session.room.isActive ? "Aktif" : "Pasif",
+        },
+      ]
+    : [];
+  const hasGeofence =
+    session.geofenceLatitude !== null &&
+    session.geofenceLongitude !== null &&
+    session.geofenceRadiusMeters !== null;
+  const geofenceItems = hasGeofence
+    ? [
+        { label: "Yoklama Alanı", value: "Tanımlı" },
+        {
+          label: "Merkez Konum",
+          value: formatCoordinates(
+            session.geofenceLatitude,
+            session.geofenceLongitude,
+          ),
+        },
+        {
+          label: "Yarıçap",
+          value: formatMeters(session.geofenceRadiusMeters),
+        },
+        {
+          label: "Konum Kaynağı",
+          value: getAttendanceSessionGeofenceSourceLabel(
+            session.geofenceSource,
+          ),
+        },
+        {
+          label: "Konum Doğruluğu",
+          value: formatDecimalMeters(session.geofenceAccuracyMeters),
+        },
+        {
+          label: "Konum Alındı",
+          value: session.geofenceCapturedAt
+            ? formatDateTimeTr(session.geofenceCapturedAt)
+            : "Belirtilmedi",
         },
       ]
     : [];
@@ -261,6 +323,27 @@ export default async function InstructorSessionDetailPage({
         </SectionCard>
 
         <div className="grid gap-6">
+          <SectionCard
+            title="Konum Doğrulama"
+            description="Öğrenci konumu daha sonra bu yoklama alanıyla karşılaştırılacak."
+            actions={
+              <div className="flex h-9 w-9 items-center justify-center rounded-md bg-neutral-100 text-neutral-600">
+                <MapPin className="h-4 w-4" aria-hidden="true" />
+              </div>
+            }
+          >
+            {hasGeofence ? (
+              <DetailList items={geofenceItems} />
+            ) : (
+              <EmptyState
+                title="Konum doğrulaması tanımlı değil"
+                description="Bu oturumda öğrenci konumu için yoklama alanı henüz saklanmamış."
+                icon={<MapPin className="h-5 w-5" aria-hidden="true" />}
+                className="min-h-40"
+              />
+            )}
+          </SectionCard>
+
           <SectionCard
             title="Yoklama Özeti"
             description="Kayıtlı yoklama durumlarının dağılımı."
