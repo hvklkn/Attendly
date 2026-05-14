@@ -163,36 +163,36 @@ export function validateCreateSessionFormValues(
       : Number(lateThresholdValue);
 
   if (!title) {
-    errors.title = "Enter a session title.";
+    errors.title = "Oturum başlığı girin.";
   }
 
   if (!sectionId) {
-    errors.sectionId = "Select a section.";
+    errors.sectionId = "Bir şube seçin.";
   }
 
   if (!values.startTime.trim()) {
-    errors.startTime = "Select a start time.";
+    errors.startTime = "Başlangıç zamanı seçin.";
   } else if (!startTime) {
-    errors.startTime = "Enter a valid start time.";
+    errors.startTime = "Geçerli bir başlangıç zamanı girin.";
   }
 
   if (!values.endTime.trim()) {
-    errors.endTime = "Select an end time.";
+    errors.endTime = "Bitiş zamanı seçin.";
   } else if (!endTime) {
-    errors.endTime = "Enter a valid end time.";
+    errors.endTime = "Geçerli bir bitiş zamanı girin.";
   }
 
   if (startTime && endTime && startTime >= endTime) {
-    errors.endTime = "End time must be after start time.";
+    errors.endTime = "Bitiş zamanı başlangıç zamanından sonra olmalıdır.";
   }
 
   if (!Number.isInteger(lateThresholdMinutes)) {
-    errors.lateThresholdMinutes = "Enter a whole number of minutes.";
+    errors.lateThresholdMinutes = "Dakika değerini tam sayı girin.";
   } else if (
     lateThresholdMinutes < LATE_THRESHOLD_MINUTES_MIN ||
     lateThresholdMinutes > LATE_THRESHOLD_MINUTES_MAX
   ) {
-    errors.lateThresholdMinutes = `Use a value from ${LATE_THRESHOLD_MINUTES_MIN} to ${LATE_THRESHOLD_MINUTES_MAX} minutes.`;
+    errors.lateThresholdMinutes = `${LATE_THRESHOLD_MINUTES_MIN} ile ${LATE_THRESHOLD_MINUTES_MAX} dakika arasında bir değer kullanın.`;
   }
 
   if (Object.keys(errors).length > 0 || !startTime || !endTime) {

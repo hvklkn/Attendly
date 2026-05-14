@@ -3,6 +3,7 @@
 import { Bell, LogOut, Search } from "lucide-react";
 import { usePathname } from "next/navigation";
 import { StatusBadge } from "@/components/ui/StatusBadge";
+import { getRoleLabel } from "@/lib/localization";
 import { cn } from "@/lib/utils";
 import type { AuthContext } from "@/types/auth";
 import type { NavigationItem } from "@/types/navigation";
@@ -14,7 +15,7 @@ type AppTopbarProps = {
 };
 
 function formatRole(role?: string) {
-  return role ? role.replace("_", " ") : "Workspace";
+  return role ? getRoleLabel(role) : "Çalışma Alanı";
 }
 
 export function AppTopbar({
@@ -44,15 +45,15 @@ export function AppTopbar({
           <div className="hidden w-full max-w-sm items-center gap-2 rounded-md border border-neutral-200 bg-neutral-50 px-3 py-2 text-sm text-neutral-500 md:flex">
             <Search className="h-4 w-4" aria-hidden="true" />
             <input
-              aria-label="Search"
-              placeholder="Search workspace"
+              aria-label="Ara"
+              placeholder="Çalışma alanında ara"
               className="w-full bg-transparent text-sm outline-none placeholder:text-neutral-400"
             />
           </div>
 
           <button
             type="button"
-            aria-label="Notifications"
+            aria-label="Bildirimler"
             className="hidden h-9 w-9 items-center justify-center rounded-md border border-neutral-200 bg-white text-neutral-500 transition hover:border-neutral-300 hover:text-neutral-950 sm:inline-flex"
           >
             <Bell className="h-4 w-4" aria-hidden="true" />
@@ -78,12 +79,12 @@ export function AppTopbar({
                   )}
                 >
                   <LogOut className="h-4 w-4" aria-hidden="true" />
-                  <span className="hidden sm:inline">Logout</span>
+                  <span className="hidden sm:inline">Çıkış</span>
                 </button>
               </form>
             </div>
           ) : (
-            <StatusBadge label="Scaffold" tone="info" />
+            <StatusBadge label="Hazırlık" tone="info" />
           )}
         </div>
       </div>

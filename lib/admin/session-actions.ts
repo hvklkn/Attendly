@@ -25,7 +25,7 @@ export async function createAdminSessionAction(
   if (!validation.ok) {
     return {
       status: "error",
-      message: "Please fix the highlighted fields.",
+      message: "Lütfen işaretli alanları düzeltin.",
       values,
       errors: validation.errors,
     };
@@ -61,7 +61,7 @@ export async function issueAdminSessionQrTokenAction(
   if (!sessionId.trim()) {
     return {
       status: "error",
-      message: "Select a valid attendance session before issuing a QR token.",
+      message: "QR oluşturmak için geçerli bir yoklama oturumu seçin.",
       issuedToken: null,
     };
   }
@@ -82,7 +82,7 @@ export async function issueAdminSessionQrTokenAction(
 
   return {
     status: "success",
-    message: "QR token issued. The raw scan value is shown once below.",
+    message: "QR oluşturuldu. Ham okutma değeri yalnızca burada gösterilir.",
     issuedToken: {
       id: result.tokenId,
       rawToken: result.rawToken,

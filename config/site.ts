@@ -1,6 +1,6 @@
 export const siteConfig = {
   name: "Attendly",
   description:
-    "Multi-tenant QR attendance and participation management for universities, academies, and training teams.",
+    "Üniversiteler, kurslar ve kurum içi eğitim ekipleri için çok kiracılı QR yoklama yönetimi.",
   supportEmail: "support@attendly.example",
 } as const;

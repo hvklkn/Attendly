@@ -15,30 +15,43 @@ import { StatCard } from "@/components/ui/StatCard";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { requireAdminAuthContext } from "@/lib/admin/auth";
 import { getAdminReportsData } from "@/lib/admin/queries";
+import {
+  getAttendanceRecordStatusLabel,
+  getRoleLabel,
+} from "@/lib/localization";
 
 const reportCards = [
   {
-    title: "Attendance summary",
-    description: "Session-level present, late, absent, and excused totals.",
-    status: "Ready for data",
+    title: "Yoklama Özeti",
+    description: "Oturum bazında katıldı, geç katıldı, katılmadı ve mazeretli toplamları.",
+    status: "Veriye hazır",
     icon: <FileBarChart className="h-4 w-4" aria-hidden="true" />,
   },
   {
-    title: "Participation trends",
-    description: "Longitudinal participation by course, section, and cohort.",
-    status: "Planned",
+    title: "Katılım Eğilimleri",
+    description: "Ders, şube ve dönem bazında katılım eğilimleri.",
+    status: "Planlandı",
     icon: <BarChart3 className="h-4 w-4" aria-hidden="true" />,
   },
   {
-    title: "Export package",
-    description: "CSV-friendly records for academic or training operations.",
-    status: "Planned",
+    title: "Dışa Aktarım Paketi",
+    description: "Akademik veya eğitim operasyonları için CSV uyumlu kayıtlar.",
+    status: "Planlandı",
     icon: <FileSpreadsheet className="h-4 w-4" aria-hidden="true" />,
   },
 ];
 
 function formatEnum(value: string) {
-  return value.replaceAll("_", " ");
+  if (
+    value === "SUPER_ADMIN" ||
+    value === "ORG_ADMIN" ||
+    value === "INSTRUCTOR" ||
+    value === "STUDENT"
+  ) {
+    return getRoleLabel(value);
+  }
+
+  return getAttendanceRecordStatusLabel(value);
 }
 
 function getRoleTone(role: string) {
@@ -70,34 +83,34 @@ export default async function AdminReportsPage() {
 
   const summaryStats = [
     {
-      label: "Total sessions",
+      label: "Toplam Oturum",
       value: String(data.totalSessions),
-      trend: "All time",
-      description: "Attendance sessions in the active organization.",
+      trend: "Tüm zamanlar",
+      description: "Aktif kurumdaki yoklama oturumları.",
       icon: <CalendarDays className="h-4 w-4" aria-hidden="true" />,
       tone: "info" as const,
     },
     {
-      label: "Completed sessions",
+      label: "Kapanan Oturum",
       value: String(data.completedSessions),
-      trend: "Closed",
-      description: "Sessions that have moved into a completed state.",
+      trend: "Kapandı",
+      description: "Kapalı duruma geçen oturumlar.",
       icon: <CheckCircle2 className="h-4 w-4" aria-hidden="true" />,
       tone: "success" as const,
     },
     {
-      label: "Members",
+      label: "Üyeler",
       value: String(data.totalMembers),
-      trend: "Tenant scoped",
-      description: "Membership records available for reports.",
+      trend: "Kurum kapsamı",
+      description: "Raporlar için kullanılabilir üyelik kayıtları.",
       icon: <Users className="h-4 w-4" aria-hidden="true" />,
       tone: "neutral" as const,
     },
     {
-      label: "Attendance records",
+      label: "Yoklama Kayıtları",
       value: String(data.attendanceRecords),
-      trend: data.attendanceRecords > 0 ? "Recorded" : "None yet",
-      description: "Raw attendance records available for aggregation.",
+      trend: data.attendanceRecords > 0 ? "Kayıtlı" : "Henüz yok",
+      description: "Özetleme için kullanılabilir ham yoklama kayıtları.",
       icon: <ListChecks className="h-4 w-4" aria-hidden="true" />,
       tone: "warning" as const,
     },
@@ -111,11 +124,11 @@ export default async function AdminReportsPage() {
   return (
     <>
       <PageHeader
-        eyebrow="Reporting"
-        title="Reports"
-        description="Read-only aggregate summaries for attendance outcomes, members, and export-ready reporting."
+        eyebrow="Raporlama"
+        title="Raporlar"
+        description="Yoklama sonuçları, üyeler ve dışa aktarıma hazır özetler."
       >
-        <StatusBadge label="Read only" tone="info" />
+        <StatusBadge label="Salt okunur" tone="info" />
       </PageHeader>
 
       <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
@@ -126,23 +139,23 @@ export default async function AdminReportsPage() {
 
       <section className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
         <SectionCard
-          title="Session outcomes"
-          description="Current session lifecycle counts from organization-scoped records."
+          title="Oturum Sonuçları"
+          description="Kurum kapsamındaki kayıtlardan oturum yaşam döngüsü sayıları."
         >
           <div className="grid gap-3 sm:grid-cols-3">
             {[
               {
-                label: "Upcoming",
+                label: "Yaklaşan",
                 value: data.upcomingSessions,
                 tone: "info" as const,
               },
               {
-                label: "Completed",
+                label: "Kapandı",
                 value: data.completedSessions,
                 tone: "success" as const,
               },
               {
-                label: "Cancelled",
+                label: "İptal Edildi",
                 value: data.cancelledSessions,
                 tone: "danger" as const,
               },
@@ -161,12 +174,12 @@ export default async function AdminReportsPage() {
         </SectionCard>
 
         <SectionCard
-          title="Export queue"
-          description="Reports generated by background jobs will be tracked here later."
+          title="Dışa Aktarım Kuyruğu"
+          description="Arka plan işleriyle üretilen raporlar ileride burada izlenecek."
         >
           <EmptyState
-            title="No exports generated"
-            description="CSV and PDF export jobs will appear here once report generation is connected."
+            title="Dışa aktarım yok"
+            description="CSV ve PDF dışa aktarım işleri rapor üretimi bağlandığında burada görünecek."
             icon={<Download className="h-5 w-5" aria-hidden="true" />}
           />
         </SectionCard>
@@ -174,8 +187,8 @@ export default async function AdminReportsPage() {
 
       <section className="grid gap-6 xl:grid-cols-2">
         <SectionCard
-          title="Role distribution"
-          description="Membership counts by role in the active organization."
+          title="Rol Dağılımı"
+          description="Aktif kurumdaki role göre üyelik sayıları."
         >
           {data.membershipCounts.length > 0 ? (
             <div className="space-y-4">
@@ -206,8 +219,8 @@ export default async function AdminReportsPage() {
             </div>
           ) : (
             <EmptyState
-              title="No members to report"
-              description="Role distribution will appear when organization memberships exist."
+              title="Raporlanacak üye yok"
+              description="Kurum üyelikleri olduğunda rol dağılımı burada görünecek."
               icon={<Users className="h-5 w-5" aria-hidden="true" />}
               className="min-h-40"
             />
@@ -215,8 +228,8 @@ export default async function AdminReportsPage() {
         </SectionCard>
 
         <SectionCard
-          title="Attendance records by status"
-          description="Counts from stored attendance records, grouped by status."
+          title="Duruma Göre Yoklama Kayıtları"
+          description="Saklanan yoklama kayıtlarının duruma göre sayıları."
         >
           {data.attendanceStatusCounts.length > 0 ? (
             <div className="divide-y divide-neutral-100">
@@ -237,8 +250,8 @@ export default async function AdminReportsPage() {
             </div>
           ) : (
             <EmptyState
-              title="No attendance records"
-              description="Attendance status summaries will appear after check-in or manual record data exists."
+              title="Yoklama kaydı yok"
+              description="Yoklama katılımı veya manuel kayıt verisi oluştuktan sonra durum özetleri burada görünecek."
               icon={<ListChecks className="h-5 w-5" aria-hidden="true" />}
               className="min-h-40"
             />
@@ -247,8 +260,8 @@ export default async function AdminReportsPage() {
       </section>
 
       <SectionCard
-        title="Report library"
-        description="Reusable report surfaces prepared for future data sources."
+        title="Rapor Kütüphanesi"
+        description="Gelecek veri kaynakları için hazırlanmış yeniden kullanılabilir rapor alanları."
       >
         <div className="grid gap-4 lg:grid-cols-3">
           {reportCards.map((report) => (
@@ -262,7 +275,7 @@ export default async function AdminReportsPage() {
                 </div>
                 <StatusBadge
                   label={report.status}
-                  tone={report.status === "Ready for data" ? "info" : "warning"}
+                  tone={report.status === "Veriye hazır" ? "info" : "warning"}
                 />
               </div>
               <h3 className="mt-4 font-semibold text-neutral-950">
@@ -277,11 +290,11 @@ export default async function AdminReportsPage() {
       </SectionCard>
 
       <SectionCard
-        title="Report filters"
-        description="Date range, course, section, and status filters are reserved for the report generation workflow."
+        title="Rapor Filtreleri"
+        description="Tarih aralığı, ders, şube ve durum filtreleri rapor üretim akışı için ayrıldı."
       >
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          {["Date range", "Course", "Section", "Attendance status"].map(
+          {["Tarih aralığı", "Ders", "Şube", "Yoklama durumu"].map(
             (filter) => (
               <div
                 key={filter}
@@ -291,7 +304,7 @@ export default async function AdminReportsPage() {
                   {filter}
                 </p>
                 <p className="mt-1 text-sm font-medium text-neutral-900">
-                  Planned
+                  Planlandı
                 </p>
               </div>
             ),

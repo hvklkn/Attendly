@@ -7,20 +7,20 @@ export default function StudentScanResultPage() {
   return (
     <>
       <PageHeader
-        title="Scan Result"
-        description="Result placeholder for successful, pending, or failed check-in states."
+        title="Okutma Sonucu"
+        description="Başarılı, bekleyen veya başarısız yoklama katılımı durumları için sonuç alanı."
       />
 
       <SectionCard
-        title="Check-in status"
-        description="This area will show the result of QR validation after the scanner flow exists."
+        title="Yoklama Katılım Durumu"
+        description="Kamera okutma akışı eklendiğinde QR doğrulama sonucu burada gösterilecek."
       >
         <div className="mb-5">
-          <StatusBadge label="Pending implementation" tone="warning" />
+          <StatusBadge label="Uygulama bekliyor" tone="warning" />
         </div>
         <EmptyState
-          title="No scan result"
-          description="Result messaging will connect to QR validation and attendance event creation in a later increment."
+          title="Okutma sonucu yok"
+          description="Sonuç mesajları QR doğrulaması ve yoklama kaydı oluşturma adımına daha sonra bağlanacak."
         />
       </SectionCard>
     </>

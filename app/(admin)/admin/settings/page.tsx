@@ -12,6 +12,12 @@ import { SectionCard } from "@/components/ui/SectionCard";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { requireAdminAuthContext } from "@/lib/admin/auth";
 import { getAdminSettingsData } from "@/lib/admin/queries";
+import {
+  formatDateTimeTr,
+  getOrganizationStatusLabel,
+  getRoleLabel,
+  getUserStatusLabel,
+} from "@/lib/localization";
 
 function SettingsList({
   items,
@@ -34,14 +40,24 @@ function SettingsList({
 }
 
 function formatDateTime(date: Date) {
-  return new Intl.DateTimeFormat("en", {
-    dateStyle: "medium",
-    timeStyle: "short",
-  }).format(date);
+  return formatDateTimeTr(date);
 }
 
 function formatEnum(value: string) {
-  return value.replaceAll("_", " ");
+  if (
+    value === "SUPER_ADMIN" ||
+    value === "ORG_ADMIN" ||
+    value === "INSTRUCTOR" ||
+    value === "STUDENT"
+  ) {
+    return getRoleLabel(value);
+  }
+
+  if (value === "ACTIVE" || value === "SUSPENDED" || value === "ARCHIVED") {
+    return getOrganizationStatusLabel(value);
+  }
+
+  return getUserStatusLabel(value);
 }
 
 function getInitials(name: string | null, email: string) {
@@ -66,26 +82,26 @@ export default async function AdminSettingsPage() {
   const data = await getAdminSettingsData(authContext);
 
   const organizationSettings = [
-    { label: "Organization", value: data.organization.name },
-    { label: "Slug", value: data.organization.slug },
-    { label: "Status", value: formatEnum(data.organization.status) },
-    { label: "Members", value: String(data.memberCount) },
-    { label: "Sessions", value: String(data.sessionCount) },
+    { label: "Kurum", value: data.organization.name },
+    { label: "Kısa ad", value: data.organization.slug },
+    { label: "Durum", value: formatEnum(data.organization.status) },
+    { label: "Üye Sayısı", value: String(data.memberCount) },
+    { label: "Oturum Sayısı", value: String(data.sessionCount) },
   ];
 
   const attendanceDefaults = [
-    { label: "Late threshold", value: "Configured per session" },
-    { label: "Default radius", value: "Configured per room" },
-    { label: "QR token expiry", value: "Configured per token" },
-    { label: "Manual review", value: "Pending workflow" },
+    { label: "Geç kalma eşiği", value: "Oturum bazında belirlenir" },
+    { label: "Varsayılan yarıçap", value: "Oda bazında belirlenir" },
+    { label: "QR geçerlilik süresi", value: "60 saniye" },
+    { label: "Manuel inceleme", value: "Akış bekliyor" },
   ];
 
   const securitySettings = [
-    { label: "Session storage", value: "DeviceSession" },
-    { label: "Password hashing", value: "scrypt" },
-    { label: "Active device sessions", value: String(data.activeDeviceSessions) },
+    { label: "Oturum saklama", value: "Cihaz oturumu" },
+    { label: "Şifre özetleme", value: "scrypt" },
+    { label: "Aktif cihaz oturumları", value: String(data.activeDeviceSessions) },
     {
-      label: "Current session expires",
+      label: "Geçerli oturum bitişi",
       value: formatDateTime(data.deviceSession.expiresAt),
     },
   ];
@@ -93,17 +109,17 @@ export default async function AdminSettingsPage() {
   return (
     <>
       <PageHeader
-        eyebrow="Workspace administration"
-        title="Settings"
-        description="Read-only tenant profile, current account context, and session security foundations."
+        eyebrow="Çalışma alanı yönetimi"
+        title="Ayarlar"
+        description="Kurum profili, geçerli hesap bağlamı ve oturum güvenliği temelleri."
       >
-        <StatusBadge label="Read only" tone="info" />
+        <StatusBadge label="Salt okunur" tone="info" />
       </PageHeader>
 
       <section className="grid gap-6 xl:grid-cols-[1fr_0.85fr]">
         <SectionCard
-          title="Organization"
-          description="Tenant-level profile details for the active workspace."
+          title="Kurum"
+          description="Aktif çalışma alanı için kurum düzeyi profil bilgileri."
           actions={
             <div className="flex h-9 w-9 items-center justify-center rounded-md bg-neutral-100 text-neutral-600">
               <Building2 className="h-4 w-4" aria-hidden="true" />
@@ -114,8 +130,8 @@ export default async function AdminSettingsPage() {
         </SectionCard>
 
         <SectionCard
-          title="Account profile"
-          description="Current user context surfaced by the auth foundation."
+          title="Hesap Profili"
+          description="Giriş temeli tarafından sağlanan geçerli kullanıcı bağlamı."
           actions={
             <div className="flex h-9 w-9 items-center justify-center rounded-md bg-neutral-100 text-neutral-600">
               <UserRound className="h-4 w-4" aria-hidden="true" />
@@ -128,7 +144,7 @@ export default async function AdminSettingsPage() {
             </div>
             <div>
               <p className="font-semibold text-neutral-950">
-                {data.user.name ?? "Unnamed user"}
+                {data.user.name ?? "İsimsiz kullanıcı"}
               </p>
               <p className="mt-1 text-sm text-neutral-500">
                 {data.user.email}
@@ -147,8 +163,8 @@ export default async function AdminSettingsPage() {
 
       <section className="grid gap-6 xl:grid-cols-2">
         <SectionCard
-          title="Attendance defaults"
-          description="Default behavior for future session creation and check-in validation."
+          title="Yoklama Varsayılanları"
+          description="Oturum oluşturma ve yoklama doğrulaması için varsayılan davranışlar."
           actions={
             <div className="flex h-9 w-9 items-center justify-center rounded-md bg-neutral-100 text-neutral-600">
               <MapPin className="h-4 w-4" aria-hidden="true" />
@@ -159,8 +175,8 @@ export default async function AdminSettingsPage() {
         </SectionCard>
 
         <SectionCard
-          title="Security and sessions"
-          description="Current session model values and future hardening areas."
+          title="Güvenlik ve Oturumlar"
+          description="Geçerli oturum modeli ve sonraki güvenlik güçlendirme alanları."
           actions={
             <div className="flex h-9 w-9 items-center justify-center rounded-md bg-neutral-100 text-neutral-600">
               <ShieldCheck className="h-4 w-4" aria-hidden="true" />
@@ -172,19 +188,19 @@ export default async function AdminSettingsPage() {
       </section>
 
       <SectionCard
-        title="Configuration readiness"
-        description="These settings are structured for later persistence and validation."
+        title="Yapılandırma Hazırlığı"
+        description="Bu ayarlar ileride kalıcı hale getirme ve doğrulama için yapılandırıldı."
       >
         <div className="grid gap-4 md:grid-cols-3">
           <div className="flex items-start gap-3 rounded-lg border border-neutral-200 bg-neutral-50 p-4">
             <Clock3 className="mt-0.5 h-4 w-4 text-neutral-500" />
             <div>
               <p className="text-sm font-medium text-neutral-950">
-                Time-based rules
+                Zaman bazlı kurallar
               </p>
               <p className="mt-1 text-sm leading-6 text-neutral-600">
-                Late thresholds and QR expiry are modeled on session and token
-                records.
+                Geç kalma eşikleri ve QR süresi oturum ve QR kayıtlarında
+                modellenir.
               </p>
             </div>
           </div>
@@ -192,17 +208,16 @@ export default async function AdminSettingsPage() {
             <KeyRound className="mt-0.5 h-4 w-4 text-neutral-500" />
             <div>
               <p className="text-sm font-medium text-neutral-950">
-                Access controls
+                Erişim kontrolleri
               </p>
               <p className="mt-1 text-sm leading-6 text-neutral-600">
-                Role-aware route protection is already backed by membership
-                context.
+                Rol bazlı rota koruması üyelik bağlamı ile çalışır.
               </p>
             </div>
           </div>
           <EmptyState
-            title="No custom policies"
-            description="Tenant-specific policy records will appear here after settings persistence is added."
+            title="Özel politika yok"
+            description="Kuruma özel politika kayıtları ayarlar kalıcı hale getirildiğinde burada görünecek."
             className="min-h-0 py-6"
           />
         </div>

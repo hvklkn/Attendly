@@ -6,13 +6,13 @@ export function PublicFooter() {
   return (
     <footer className="border-t border-neutral-200 bg-white">
       <div className="mx-auto flex max-w-6xl flex-col gap-3 px-4 py-8 text-sm text-neutral-500 sm:flex-row sm:items-center sm:justify-between sm:px-6 lg:px-8">
-        <p>{siteConfig.name} scaffold.</p>
+        <p>{siteConfig.name} yoklama yönetimi.</p>
         <div className="flex gap-4">
           <Link href={routes.public.privacy} className="hover:text-neutral-950">
-            Privacy
+            Gizlilik
           </Link>
           <Link href={routes.public.terms} className="hover:text-neutral-950">
-            Terms
+            Koşullar
           </Link>
         </div>
       </div>

@@ -90,7 +90,7 @@ export function AppSidebar({
                 {siteConfig.name}
               </p>
               <p className="mt-0.5 text-sm text-neutral-500">
-                {areaLabel} workspace
+                {areaLabel} alanı
               </p>
             </div>
           </div>
@@ -141,10 +141,10 @@ export function AppSidebar({
       </nav>
       <div className="border-t border-neutral-200 px-6 py-4">
         <p className="text-xs font-medium uppercase tracking-normal text-neutral-500">
-          Environment
+          Ortam
         </p>
         <p className="mt-1 text-sm font-medium text-neutral-800">
-          Foundation
+          Temel yapı
         </p>
       </div>
     </aside>

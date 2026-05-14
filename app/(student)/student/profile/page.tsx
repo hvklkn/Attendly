@@ -6,17 +6,17 @@ export default function StudentProfilePage() {
   return (
     <>
       <PageHeader
-        title="Profile"
-        description="Student profile foundation for identity, enrollment, and attendance preferences."
+        title="Profil"
+        description="Kimlik, kayıt ve yoklama tercihleri için öğrenci profil temeli."
       />
 
       <SectionCard
-        title="Profile details"
-        description="Prepared for future user profile data from the auth and tenant model."
+        title="Profil Bilgileri"
+        description="Giriş ve kurum modelinden gelecek kullanıcı profil verileri için hazırlandı."
       >
         <EmptyState
-          title="Profile not connected"
-          description="Profile details will be introduced after authentication and student membership are implemented."
+          title="Profil bağlı değil"
+          description="Profil bilgileri öğrenci üyeliği ve kimlik akışı genişletildiğinde eklenecek."
         />
       </SectionCard>
     </>

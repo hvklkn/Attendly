@@ -6,6 +6,11 @@ import { SectionCard } from "@/components/ui/SectionCard";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { requireAdminAuthContext } from "@/lib/admin/auth";
 import { getAdminUsersData } from "@/lib/admin/queries";
+import {
+  formatDateTr,
+  getRoleLabel,
+  getUserStatusLabel,
+} from "@/lib/localization";
 
 type AdminUsersPageProps = {
   searchParams?: Promise<{
@@ -33,13 +38,20 @@ function getInitials(name: string | null, email: string) {
 }
 
 function formatDate(date: Date) {
-  return new Intl.DateTimeFormat("en", {
-    dateStyle: "medium",
-  }).format(date);
+  return formatDateTr(date);
 }
 
 function formatEnum(value: string) {
-  return value.replaceAll("_", " ");
+  if (
+    value === "SUPER_ADMIN" ||
+    value === "ORG_ADMIN" ||
+    value === "INSTRUCTOR" ||
+    value === "STUDENT"
+  ) {
+    return getRoleLabel(value);
+  }
+
+  return getUserStatusLabel(value);
 }
 
 function getRoleTone(role: string) {
@@ -66,22 +78,22 @@ export default async function AdminUsersPage({
   return (
     <>
       <PageHeader
-        eyebrow="Access management"
-        title="Users"
-        description="Read organization members and their role-based access from the Membership model."
+        eyebrow="Erişim yönetimi"
+        title="Kullanıcılar"
+        description="Kurum üyelerini ve rol bazlı erişimlerini görüntüleyin."
       >
         <ButtonLink
           href="/admin/users"
           variant="primary"
           icon={<UserPlus className="h-4 w-4" aria-hidden="true" />}
         >
-          Invite user
+          Kullanıcı Davet Et
         </ButtonLink>
       </PageHeader>
 
       <SectionCard
-        title="User directory"
-        description="Membership records are scoped to the current organization before user details are selected."
+        title="Kullanıcı Listesi"
+        description="Üyelik kayıtları kullanıcı detayları seçilmeden önce geçerli kurumla sınırlandırılır."
       >
         <form
           action="/admin/users"
@@ -89,11 +101,11 @@ export default async function AdminUsersPage({
         >
           <label className="flex items-center gap-2 rounded-md border border-neutral-300 bg-white px-3 py-2 text-sm text-neutral-500">
             <Search className="h-4 w-4" aria-hidden="true" />
-            <span className="sr-only">Search users</span>
+            <span className="sr-only">Kullanıcı ara</span>
             <input
               name="q"
               defaultValue={query}
-              placeholder="Search users"
+              placeholder="Kullanıcı ara"
               className="w-full bg-transparent outline-none placeholder:text-neutral-400"
             />
           </label>
@@ -102,7 +114,7 @@ export default async function AdminUsersPage({
             className="inline-flex items-center justify-center gap-2 rounded-md border border-neutral-300 bg-white px-3 py-2 text-sm font-medium text-neutral-700 transition hover:border-neutral-400 hover:text-neutral-950"
           >
             <Search className="h-4 w-4" aria-hidden="true" />
-            Search
+            Ara
           </button>
           <button
             type="button"
@@ -110,7 +122,7 @@ export default async function AdminUsersPage({
             className="inline-flex cursor-not-allowed items-center justify-center gap-2 rounded-md border border-neutral-200 bg-neutral-50 px-3 py-2 text-sm font-medium text-neutral-400"
           >
             <Users className="h-4 w-4" aria-hidden="true" />
-            Role
+            Rol
           </button>
           <button
             type="button"
@@ -118,7 +130,7 @@ export default async function AdminUsersPage({
             className="inline-flex cursor-not-allowed items-center justify-center gap-2 rounded-md border border-neutral-200 bg-neutral-50 px-3 py-2 text-sm font-medium text-neutral-400"
           >
             <Filter className="h-4 w-4" aria-hidden="true" />
-            Status
+            Durum
           </button>
         </form>
 
@@ -128,11 +140,11 @@ export default async function AdminUsersPage({
               <table className="w-full border-collapse text-left text-sm">
                 <thead className="bg-neutral-50 text-xs font-medium uppercase tracking-normal text-neutral-500">
                   <tr>
-                    <th className="px-4 py-3">Member</th>
-                    <th className="px-4 py-3">Role</th>
-                    <th className="px-4 py-3">Status</th>
-                    <th className="px-4 py-3">Organization</th>
-                    <th className="px-4 py-3">Updated</th>
+                    <th className="px-4 py-3">Üye</th>
+                    <th className="px-4 py-3">Rol</th>
+                    <th className="px-4 py-3">Durum</th>
+                    <th className="px-4 py-3">Kurum</th>
+                    <th className="px-4 py-3">Güncellendi</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-neutral-100 bg-white">
@@ -148,7 +160,7 @@ export default async function AdminUsersPage({
                           </div>
                           <div>
                             <p className="font-medium text-neutral-950">
-                              {membership.user.name ?? "Unnamed user"}
+                              {membership.user.name ?? "İsimsiz kullanıcı"}
                             </p>
                             <p className="mt-1 text-xs text-neutral-500">
                               {membership.user.email}
@@ -195,7 +207,7 @@ export default async function AdminUsersPage({
                     </div>
                     <div className="min-w-0 flex-1">
                       <p className="font-medium text-neutral-950">
-                        {membership.user.name ?? "Unnamed user"}
+                        {membership.user.name ?? "İsimsiz kullanıcı"}
                       </p>
                       <p className="mt-1 truncate text-sm text-neutral-500">
                         {membership.user.email}
@@ -211,7 +223,7 @@ export default async function AdminUsersPage({
                         />
                       </div>
                       <p className="mt-3 text-xs text-neutral-500">
-                        Updated {formatDate(membership.updatedAt)}
+                        Güncellendi {formatDate(membership.updatedAt)}
                       </p>
                     </div>
                   </div>
@@ -221,11 +233,11 @@ export default async function AdminUsersPage({
           </>
         ) : (
           <EmptyState
-            title={query ? "No users match your search" : "No users connected"}
+            title={query ? "Aramanızla eşleşen kullanıcı yok" : "Bağlı kullanıcı yok"}
             description={
               query
-                ? "Try another search term, or clear the search to view all organization memberships."
-                : "Members will appear here after tenant membership records are created."
+                ? "Farklı bir arama terimi deneyin veya aramayı temizleyin."
+                : "Kurum üyelik kayıtları oluşturulduğunda üyeler burada görünecek."
             }
             icon={<Users className="h-5 w-5" aria-hidden="true" />}
           />

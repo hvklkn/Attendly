@@ -28,15 +28,15 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
     <div className="w-full">
       <SectionCard>
         <div className="mb-6">
-          <StatusBadge label="DB-backed auth foundation" tone="info" />
+          <StatusBadge label="Veritabanı destekli giriş" tone="info" />
         </div>
         <PageHeader
-          title="Login"
-          description="Sign in with a seeded development account."
+          title="Giriş"
+          description="Demo hesabınızla Attendly çalışma alanına giriş yapın."
         />
         {hasError ? (
           <div className="mt-6 rounded-md border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
-            Invalid email or password.
+            E-posta veya şifre hatalı.
           </div>
         ) : null}
         <form action={loginAction} className="mt-8 space-y-5">
@@ -45,7 +45,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
               htmlFor="email"
               className="text-sm font-medium text-neutral-700"
             >
-              Email
+              E-posta
             </label>
             <input
               id="email"
@@ -53,7 +53,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
               type="email"
               autoComplete="email"
               required
-              placeholder="name@example.com"
+              placeholder="ad@example.com"
               className="mt-2 w-full rounded-md border border-neutral-300 bg-white px-3 py-2 text-sm outline-none transition placeholder:text-neutral-400 focus:border-neutral-950"
             />
           </div>
@@ -62,7 +62,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
               htmlFor="password"
               className="text-sm font-medium text-neutral-700"
             >
-              Password
+              Şifre
             </label>
             <input
               id="password"
@@ -70,7 +70,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
               type="password"
               autoComplete="current-password"
               required
-              placeholder="Password"
+              placeholder="Şifre"
               className="mt-2 w-full rounded-md border border-neutral-300 bg-white px-3 py-2 text-sm outline-none transition placeholder:text-neutral-400 focus:border-neutral-950"
             />
           </div>
@@ -78,7 +78,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
             type="submit"
             className="w-full rounded-md bg-neutral-950 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-neutral-800"
           >
-            Continue
+            Devam Et
           </button>
         </form>
       </SectionCard>

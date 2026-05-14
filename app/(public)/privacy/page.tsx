@@ -5,18 +5,19 @@ export default function PrivacyPage() {
   return (
     <div className="mx-auto flex max-w-4xl flex-col gap-8 px-4 py-12 sm:px-6 lg:px-8">
       <PageHeader
-        title="Privacy"
-        description="A placeholder for Attendly privacy commitments and data handling details."
+        title="Gizlilik"
+        description="Attendly'nin veri işleme ve gizlilik ilkeleri için hazırlık sayfası."
       />
-      <SectionCard title="Privacy policy placeholder">
+      <SectionCard title="Gizlilik Politikası Hazırlığı">
         <div className="space-y-4 text-sm leading-7 text-neutral-600">
           <p>
-            Attendly will document how workspace, session, attendance, and user
-            profile data are collected and protected before production launch.
+            Attendly, kurum, oturum, yoklama ve kullanıcı profil verilerinin
+            nasıl toplandığını ve korunduğunu üretim kullanımı öncesinde açıkça
+            belgeleyecek.
           </p>
           <p>
-            This page is intentionally lightweight until legal, compliance, and
-            product data flows are finalized.
+            Hukuki, uyumluluk ve ürün veri akışları netleşene kadar bu sayfa
+            sade tutulur.
           </p>
         </div>
       </SectionCard>

@@ -6,17 +6,17 @@ export default function StudentAttendancePage() {
   return (
     <>
       <PageHeader
-        title="Attendance History"
-        description="Student-facing record of attendance and participation events."
+        title="Yoklama Geçmişi"
+        description="Öğrenciye ait yoklama ve katılım kayıtları."
       />
 
       <SectionCard
-        title="History"
-        description="Timeline placeholder for a student's attendance records."
+        title="Geçmiş"
+        description="Öğrencinin yoklama kayıtları için zaman çizelgesi alanı."
       >
         <EmptyState
-          title="No attendance records"
-          description="Attendance history will appear after sessions, check-ins, and student identity are connected."
+          title="Yoklama kaydı yok"
+          description="Oturumlar, yoklama katılımı ve öğrenci kimliği bağlandığında yoklama geçmişi burada görünecek."
         />
       </SectionCard>
     </>

@@ -15,16 +15,16 @@ export default async function AdminCreateSessionPage() {
     <>
       <PageHeader
         eyebrow={authContext.activeOrganization.name}
-        title="Create Session"
-        description="Prepare a new attendance session with real organization-scoped courses, sections, rooms, and instructors."
+        title="Yoklama Oturumu Oluştur"
+        description="Kurum kapsamındaki ders, şube, oda ve öğretmen bilgileriyle yeni yoklama oturumu hazırlayın."
       >
         <ButtonLink
           href={routes.admin.sessions}
           icon={<ArrowLeft className="h-4 w-4" aria-hidden="true" />}
         >
-          Back
+          Geri
         </ButtonLink>
-        <StatusBadge label="Server action" tone="info" />
+        <StatusBadge label="Sunucu işlemi" tone="info" />
       </PageHeader>
 
       <AdminCreateSessionForm options={options} />

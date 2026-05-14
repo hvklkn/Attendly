@@ -8,6 +8,7 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { issueAdminSessionQrTokenAction } from "@/lib/admin/session-actions";
+import { formatDateTimeTr } from "@/lib/localization";
 import {
   canIssueQrTokenForSessionStatus,
   getQrTokenStatus,
@@ -28,14 +29,13 @@ type DetailRow = {
 };
 
 function formatDateTime(value: string) {
-  return new Intl.DateTimeFormat("en", {
-    dateStyle: "medium",
-    timeStyle: "short",
-  }).format(new Date(value));
+  return formatDateTimeTr(value);
 }
 
 function formatTokenStatus(status: QrTokenStatus) {
-  return status.charAt(0).toUpperCase() + status.slice(1);
+  if (status === "active") return "Aktif";
+  if (status === "expired") return "Süresi doldu";
+  return "Yenilendi";
 }
 
 function getTokenStatusTone(status: QrTokenStatus) {
@@ -81,7 +81,7 @@ function IssueButton({
         className={pending ? "h-4 w-4 animate-spin" : "h-4 w-4"}
         aria-hidden="true"
       />
-      {pending ? "Issuing..." : hasLatestToken ? "Refresh QR" : "Issue QR"}
+      {pending ? "Oluşturuluyor..." : hasLatestToken ? "QR Yenile" : "QR Oluştur"}
     </button>
   );
 }
@@ -106,7 +106,7 @@ function CopyButton({ value, label }: { value: string; label: string }) {
       className="inline-flex h-8 items-center justify-center gap-2 rounded-md border border-neutral-300 bg-white px-3 text-xs font-medium text-neutral-700 transition hover:border-neutral-400 hover:text-neutral-950"
     >
       <Copy className="h-3.5 w-3.5" aria-hidden="true" />
-      {copied ? "Copied" : label}
+      {copied ? "Kopyalandı" : label}
     </button>
   );
 }
@@ -138,7 +138,7 @@ export function AdminSessionQrTokenPanel({
     displayedToken && displayedTokenStatus
       ? [
           {
-            label: "Token ID",
+            label: "Anahtar Kimliği",
             value: (
               <span className="break-all font-mono text-xs">
                 {displayedToken.id}
@@ -146,7 +146,7 @@ export function AdminSessionQrTokenPanel({
             ),
           },
           {
-            label: "Status",
+            label: "QR Durumu",
             value: (
               <StatusBadge
                 label={formatTokenStatus(displayedTokenStatus)}
@@ -154,21 +154,21 @@ export function AdminSessionQrTokenPanel({
               />
             ),
           },
-          { label: "Created", value: formatDateTime(displayedToken.createdAt) },
-          { label: "Expires", value: formatDateTime(displayedToken.expiresAt) },
+          { label: "Oluşturulma", value: formatDateTime(displayedToken.createdAt) },
+          { label: "Geçerlilik Süresi", value: formatDateTime(displayedToken.expiresAt) },
           {
-            label: "Revoked",
+            label: "Yenilenme",
             value: displayedToken.revokedAt
               ? formatDateTime(displayedToken.revokedAt)
-              : "No",
+              : "Hayır",
           },
         ]
       : [];
 
   return (
     <SectionCard
-      title="QR token"
-      description="Issue a short-lived scan value for this attendance session."
+      title="QR Anahtarı"
+      description="Bu yoklama oturumu için 60 saniyelik okutma değeri oluşturun."
       actions={
         <div className="flex h-9 w-9 items-center justify-center rounded-md bg-neutral-100 text-neutral-600">
           <KeyRound className="h-4 w-4" aria-hidden="true" />
@@ -182,8 +182,8 @@ export function AdminSessionQrTokenPanel({
           <TokenDetailList items={tokenRows} />
         ) : (
           <EmptyState
-            title="No QR token issued"
-            description="Issue a token when this session is ready to accept a QR scan."
+            title="Henüz QR oluşturulmadı"
+            description="Oturum QR okutmaya hazır olduğunda güvenli okutma değeri oluşturun."
             icon={<QrCode className="h-5 w-5" aria-hidden="true" />}
             className="min-h-40"
           />
@@ -200,8 +200,7 @@ export function AdminSessionQrTokenPanel({
 
         {!canIssueToken ? (
           <p className="text-sm leading-6 text-neutral-500">
-            QR tokens can only be issued while the session is draft, scheduled,
-            or active.
+            QR yalnızca taslak, planlı veya aktif oturumlar için oluşturulabilir.
           </p>
         ) : null}
 
@@ -211,7 +210,7 @@ export function AdminSessionQrTokenPanel({
       {state.status === "success" && state.issuedToken ? (
         <div className="mt-5 grid gap-4 border-t border-neutral-100 pt-5">
           <div className="rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
-            {state.message} The raw value is not stored after issuance.
+            {state.message} Ham değer oluşturma sonrasında saklanmaz.
           </div>
 
           <div className="grid gap-4 lg:grid-cols-[180px_1fr]">
@@ -219,7 +218,7 @@ export function AdminSessionQrTokenPanel({
               <div className="grid justify-items-center gap-2">
                 <QrCode className="h-14 w-14" aria-hidden="true" />
                 <span className="text-xs font-medium uppercase tracking-normal">
-                  QR placeholder
+                  QR alanı
                 </span>
               </div>
             </div>
@@ -228,9 +227,12 @@ export function AdminSessionQrTokenPanel({
               <div>
                 <div className="mb-2 flex items-center justify-between gap-3">
                   <p className="text-sm font-medium text-neutral-700">
-                    Scan URL
+                    Okutma Bağlantısı
                   </p>
-                  <CopyButton value={state.issuedToken.scanUrl} label="Copy" />
+                  <CopyButton
+                    value={state.issuedToken.scanUrl}
+                    label="Bağlantıyı Kopyala"
+                  />
                 </div>
                 <code className="block break-all rounded-md bg-neutral-950 px-3 py-2 text-xs leading-5 text-white">
                   {state.issuedToken.scanUrl}
@@ -240,9 +242,12 @@ export function AdminSessionQrTokenPanel({
               <div>
                 <div className="mb-2 flex items-center justify-between gap-3">
                   <p className="text-sm font-medium text-neutral-700">
-                    Raw token
+                    Ham QR Değeri
                   </p>
-                  <CopyButton value={state.issuedToken.rawToken} label="Copy" />
+                  <CopyButton
+                    value={state.issuedToken.rawToken}
+                    label="Değeri Kopyala"
+                  />
                 </div>
                 <code className="block break-all rounded-md bg-neutral-100 px-3 py-2 text-xs leading-5 text-neutral-900">
                   {state.issuedToken.rawToken}

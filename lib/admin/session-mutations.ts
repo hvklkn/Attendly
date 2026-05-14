@@ -2,14 +2,11 @@ import "server-only";
 
 import { AttendanceSessionStatus } from "@/lib/generated/prisma/enums";
 import { getAdminOrganizationId, type AdminAuthContext } from "@/lib/admin/auth";
-import { canIssueQrTokenForSessionStatus } from "@/lib/admin/session-qr";
 import { db } from "@/lib/db";
 import {
-  createQrScanUrl,
-  createRawQrToken,
-  getQrTokenExpiresAt,
-  hashQrToken,
-} from "@/lib/qr-tokens";
+  issueAttendanceSessionQrToken,
+  type IssueAttendanceSessionQrTokenResult,
+} from "@/lib/qr-issuance";
 import type {
   CreateSessionFormErrors,
   ValidCreateSessionInput,
@@ -27,20 +24,7 @@ export type CreateAdminSessionResult =
     };
 
 export type IssueAdminSessionQrTokenResult =
-  | {
-      ok: true;
-      attendanceSessionId: string;
-      tokenId: string;
-      rawToken: string;
-      scanUrl: string;
-      expiresAt: Date;
-      createdAt: Date;
-      revokedPreviousCount: number;
-    }
-  | {
-      ok: false;
-      message: string;
-    };
+  IssueAttendanceSessionQrTokenResult;
 
 export async function createAdminAttendanceSession(
   authContext: AdminAuthContext,
@@ -64,9 +48,9 @@ export async function createAdminAttendanceSession(
     if (!section) {
       return {
         ok: false,
-        message: "Select an active section from this organization.",
+        message: "Bu kurumdan aktif bir şube seçin.",
         errors: {
-          sectionId: "Select an active section from this organization.",
+          sectionId: "Bu kurumdan aktif bir şube seçin.",
         },
       };
     }
@@ -74,10 +58,10 @@ export async function createAdminAttendanceSession(
     if (input.courseId && section.courseId !== input.courseId) {
       return {
         ok: false,
-        message: "The selected course does not match the selected section.",
+        message: "Seçilen ders seçilen şube ile eşleşmiyor.",
         errors: {
-          courseId: "Choose the course that owns the selected section.",
-          sectionId: "Choose a section for the selected course.",
+          courseId: "Seçilen şubenin bağlı olduğu dersi seçin.",
+          sectionId: "Seçilen ders için bir şube seçin.",
         },
       };
     }
@@ -100,10 +84,10 @@ export async function createAdminAttendanceSession(
         return {
           ok: false,
           message:
-            "Select an active room from this organization, or leave it empty.",
+            "Bu kurumdan aktif bir oda seçin veya alanı boş bırakın.",
           errors: {
             roomId:
-              "Select an active room from this organization, or leave it empty.",
+              "Bu kurumdan aktif bir oda seçin veya alanı boş bırakın.",
           },
         };
       }
@@ -137,7 +121,7 @@ export async function createAdminAttendanceSession(
     return {
       ok: false,
       message:
-        "We could not create the session right now. Please review the form and try again.",
+        "Oturum şu anda oluşturulamadı. Lütfen formu kontrol edip tekrar deneyin.",
     };
   }
 }
@@ -147,93 +131,9 @@ export async function issueAdminSessionQrToken(
   sessionId: string,
 ): Promise<IssueAdminSessionQrTokenResult> {
   const organizationId = getAdminOrganizationId(authContext);
-  const normalizedSessionId = sessionId.trim();
 
-  if (!normalizedSessionId) {
-    return {
-      ok: false,
-      message: "Select a valid attendance session before issuing a QR token.",
-    };
-  }
-
-  try {
-    const attendanceSession = await db.attendanceSession.findFirst({
-      where: {
-        id: normalizedSessionId,
-        organizationId,
-      },
-      select: {
-        id: true,
-        status: true,
-      },
-    });
-
-    if (!attendanceSession) {
-      return {
-        ok: false,
-        message: "Attendance session was not found.",
-      };
-    }
-
-    if (!canIssueQrTokenForSessionStatus(attendanceSession.status)) {
-      return {
-        ok: false,
-        message:
-          "QR tokens can only be issued for draft, scheduled, or active sessions.",
-      };
-    }
-
-    const rawToken = createRawQrToken();
-    const tokenHash = hashQrToken(rawToken);
-    const createdAt = new Date();
-    const expiresAt = getQrTokenExpiresAt(createdAt);
-
-    const [revokedPreviousTokens, qrToken] = await db.$transaction([
-      db.qRToken.updateMany({
-        where: {
-          organizationId,
-          attendanceSessionId: attendanceSession.id,
-          revokedAt: null,
-          expiresAt: {
-            gt: createdAt,
-          },
-        },
-        data: {
-          revokedAt: createdAt,
-        },
-      }),
-      db.qRToken.create({
-        data: {
-          organizationId,
-          attendanceSessionId: attendanceSession.id,
-          createdByMembershipId: authContext.membership.id,
-          tokenHash,
-          expiresAt,
-          createdAt,
-        },
-        select: {
-          id: true,
-          expiresAt: true,
-          createdAt: true,
-        },
-      }),
-    ]);
-
-    return {
-      ok: true,
-      attendanceSessionId: attendanceSession.id,
-      tokenId: qrToken.id,
-      rawToken,
-      scanUrl: createQrScanUrl(rawToken),
-      expiresAt: qrToken.expiresAt,
-      createdAt: qrToken.createdAt,
-      revokedPreviousCount: revokedPreviousTokens.count,
-    };
-  } catch {
-    return {
-      ok: false,
-      message:
-        "We could not issue a QR token right now. Please try again in a moment.",
-    };
-  }
+  return issueAttendanceSessionQrToken(authContext, {
+    sessionId,
+    organizationId,
+  });
 }

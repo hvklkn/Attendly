@@ -1,41 +1,54 @@
+import { CalendarClock, CheckCircle2, ListChecks } from "lucide-react";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { StatCard } from "@/components/ui/StatCard";
+import { requireInstructorAuthContext } from "@/lib/instructor/auth";
+import { getInstructorDashboardData } from "@/lib/instructor/queries";
 
-export default function InstructorDashboardPage() {
+export default async function InstructorDashboardPage() {
+  const authContext = await requireInstructorAuthContext();
+  const data = await getInstructorDashboardData(authContext);
+
   return (
     <>
       <PageHeader
-        title="Instructor Dashboard"
-        description="Teaching overview for upcoming sessions and attendance activity."
+        eyebrow={authContext.activeOrganization.name}
+        title="Öğretmen Paneli"
+        description="Size atanmış yoklama oturumları ve canlı yoklama durumu."
       />
 
       <section className="grid gap-4 md:grid-cols-3">
         <StatCard
-          label="Upcoming sessions"
-          value="0"
-          description="Future sessions assigned to the instructor."
+          label="Toplam Oturum"
+          value={String(data.totalSessions)}
+          description="Öğretmeni olduğunuz şubelere bağlı oturumlar."
+          icon={<ListChecks className="h-4 w-4" aria-hidden="true" />}
+          tone="info"
         />
         <StatCard
-          label="Active check-ins"
-          value="0"
-          description="Live attendance status placeholder."
+          label="Yaklaşan Oturum"
+          value={String(data.upcomingSessionsCount)}
+          description="Planlanan veya aktif zaman pencereleri."
+          icon={<CalendarClock className="h-4 w-4" aria-hidden="true" />}
+          tone="warning"
         />
         <StatCard
-          label="Needs review"
-          value="0"
-          description="Future exceptions and manual review count."
+          label="Aktif Yoklama"
+          value={String(data.activeSessionsCount)}
+          description="Şu anda aktif işaretlenen oturumlar."
+          icon={<CheckCircle2 className="h-4 w-4" aria-hidden="true" />}
+          tone="success"
         />
       </section>
 
       <SectionCard
-        title="Teaching workspace"
-        description="Prepared for instructor-specific session management."
+        title="Öğretmen Çalışma Alanı"
+        description="QR oluşturma ve oturum takibi için hızlı başlangıç."
       >
         <EmptyState
-          title="No instructor data yet"
-          description="Assigned sessions and attendance activity will appear here after auth and persistence are added."
+          title="Oturumlar sayfasından devam edin"
+          description="Canlı QR oluşturmak veya oturum ayrıntılarını görmek için size atanmış yoklama oturumlarını açın."
         />
       </SectionCard>
     </>

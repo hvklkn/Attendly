@@ -20,44 +20,45 @@ import { StatusBadge } from "@/components/ui/StatusBadge";
 import { routes } from "@/constants/routes";
 import { requireAdminAuthContext } from "@/lib/admin/auth";
 import { getAdminDashboardData } from "@/lib/admin/queries";
+import {
+  formatDateTimeTr,
+  getAttendanceSessionStatusLabel,
+} from "@/lib/localization";
 
 const quickActions = [
   {
-    title: "Create session",
-    description: "Prepare an attendance window for a section.",
+    title: "Yoklama oturumu oluştur",
+    description: "Bir şube için yoklama zaman aralığı hazırlayın.",
     href: routes.admin.sessionCreate,
     icon: <CalendarPlus className="h-4 w-4" aria-hidden="true" />,
   },
   {
-    title: "Invite users",
-    description: "Stage admins, instructors, or students.",
+    title: "Kullanıcıları görüntüle",
+    description: "Yönetici, öğretmen ve öğrenci rollerini inceleyin.",
     href: routes.admin.users,
     icon: <UserPlus className="h-4 w-4" aria-hidden="true" />,
   },
   {
-    title: "View reports",
-    description: "Review participation summaries.",
+    title: "Raporları aç",
+    description: "Yoklama özetlerini inceleyin.",
     href: routes.admin.reports,
     icon: <FileBarChart className="h-4 w-4" aria-hidden="true" />,
   },
 ];
 
 const platformStatus = [
-  { label: "Auth boundary", status: "Ready", tone: "success" as const },
-  { label: "Prisma schema", status: "Ready", tone: "success" as const },
-  { label: "QR flow", status: "Planned", tone: "warning" as const },
-  { label: "Reports engine", status: "Planned", tone: "warning" as const },
+  { label: "Giriş sınırı", status: "Hazır", tone: "success" as const },
+  { label: "Prisma şeması", status: "Hazır", tone: "success" as const },
+  { label: "QR akışı", status: "Hazır", tone: "success" as const },
+  { label: "Rapor motoru", status: "Planlandı", tone: "warning" as const },
 ];
 
 function formatDateTime(date: Date) {
-  return new Intl.DateTimeFormat("en", {
-    dateStyle: "medium",
-    timeStyle: "short",
-  }).format(date);
+  return formatDateTimeTr(date);
 }
 
 function formatStatus(status: string) {
-  return status.replaceAll("_", " ");
+  return getAttendanceSessionStatusLabel(status);
 }
 
 function getSessionTone(status: string) {
@@ -73,34 +74,34 @@ export default async function AdminDashboardPage() {
 
   const overviewStats = [
     {
-      label: "Total sessions",
+      label: "Toplam Oturum",
       value: String(data.totalSessions),
-      trend: "All time",
-      description: "Attendance sessions scoped to this organization.",
+      trend: "Tüm zamanlar",
+      description: "Bu kuruma ait yoklama oturumları.",
       icon: <CalendarDays className="h-4 w-4" aria-hidden="true" />,
       tone: "info" as const,
     },
     {
-      label: "Upcoming sessions",
+      label: "Yaklaşan Oturum",
       value: String(data.upcomingSessionsCount),
-      trend: "Scheduled",
-      description: "Future sessions not yet closed or cancelled.",
+      trend: "Planlandı",
+      description: "Henüz kapanmamış veya iptal edilmemiş gelecek oturumlar.",
       icon: <Clock3 className="h-4 w-4" aria-hidden="true" />,
       tone: "neutral" as const,
     },
     {
-      label: "Members",
+      label: "Üyeler",
       value: String(data.totalMembers),
-      trend: "Active tenant",
-      description: "Membership records in the current organization.",
+      trend: "Aktif kurum",
+      description: "Geçerli kurumdaki üyelik kayıtları.",
       icon: <Users className="h-4 w-4" aria-hidden="true" />,
       tone: "neutral" as const,
     },
     {
-      label: "Attendance rate",
+      label: "Katılım Oranı",
       value: data.attendanceRate === null ? "--" : `${data.attendanceRate}%`,
-      trend: data.totalAttendanceRecords > 0 ? "Recorded" : "No records",
-      description: "Present, late, and manual records over total records.",
+      trend: data.totalAttendanceRecords > 0 ? "Kayıtlı" : "Kayıt yok",
+      description: "Katıldı, geç katıldı ve manuel kayıtların toplam içindeki oranı.",
       icon: <CheckCircle2 className="h-4 w-4" aria-hidden="true" />,
       tone: "success" as const,
     },
@@ -110,15 +111,15 @@ export default async function AdminDashboardPage() {
     <>
       <PageHeader
         eyebrow={authContext.activeOrganization.name}
-        title="Dashboard"
-        description="Operational overview for sessions, people, reports, and workspace readiness."
+        title="Panel"
+        description="Oturumlar, kullanıcılar, raporlar ve çalışma alanı durumu için operasyon özeti."
       >
         <ButtonLink
           href={routes.admin.sessionCreate}
           variant="primary"
           icon={<CalendarPlus className="h-4 w-4" aria-hidden="true" />}
         >
-          Create session
+          Yoklama Oturumu Oluştur
         </ButtonLink>
       </PageHeader>
 
@@ -130,15 +131,15 @@ export default async function AdminDashboardPage() {
 
       <section className="grid gap-6 xl:grid-cols-[1.35fr_0.65fr]">
         <SectionCard
-          title="Upcoming sessions"
-          description="Next scheduled sessions for the active organization."
+          title="Yaklaşan Oturumlar"
+          description="Aktif kurum için sıradaki planlı oturumlar."
           actions={
             <ButtonLink
               href={routes.admin.sessions}
               variant="ghost"
               icon={<ArrowRight className="h-4 w-4" aria-hidden="true" />}
             >
-              View all
+              Tümünü Gör
             </ButtonLink>
           }
         >
@@ -161,7 +162,7 @@ export default async function AdminDashboardPage() {
                     {formatDateTime(session.startTime)}
                   </p>
                   <p className="text-sm text-neutral-600">
-                    {session.room?.name ?? "No room"}
+                    {session.room?.name ?? "Oda yok"}
                   </p>
                   <StatusBadge
                     label={formatStatus(session.status)}
@@ -172,31 +173,31 @@ export default async function AdminDashboardPage() {
             </div>
           ) : (
             <EmptyState
-              title="No upcoming sessions"
-              description="Future attendance sessions will appear here after they are created."
+              title="Yaklaşan oturum yok"
+              description="Gelecek yoklama oturumları oluşturulduktan sonra burada görünecek."
               icon={<CalendarDays className="h-5 w-5" aria-hidden="true" />}
               actionHref={routes.admin.sessionCreate}
-              actionLabel="Create session"
+              actionLabel="Oturum oluştur"
             />
           )}
         </SectionCard>
 
         <SectionCard
-          title="Attention needed"
-          description="Read-only review queue based on attendance records."
+          title="İnceleme Gerekiyor"
+          description="Yoklama kayıtlarına dayalı salt okunur inceleme kuyruğu."
         >
           {data.needsReviewCount > 0 ? (
             <EmptyState
-              title={`${data.needsReviewCount} records need review`}
-              description="Rejected and manual attendance records are counted here for future review workflows."
+              title={`${data.needsReviewCount} kayıt inceleme bekliyor`}
+              description="Reddedilen ve manuel yoklama kayıtları sonraki inceleme akışları için burada sayılır."
               icon={<AlertTriangle className="h-5 w-5" aria-hidden="true" />}
               actionHref={routes.admin.reports}
-              actionLabel="Open reports"
+              actionLabel="Raporları aç"
             />
           ) : (
             <EmptyState
-              title="No records need review"
-              description="Rejected and manual attendance records will appear here when they exist."
+              title="İnceleme bekleyen kayıt yok"
+              description="Reddedilen ve manuel yoklama kayıtları oluştuğunda burada görünecek."
               icon={<CheckCircle2 className="h-5 w-5" aria-hidden="true" />}
             />
           )}
@@ -205,8 +206,8 @@ export default async function AdminDashboardPage() {
 
       <section className="grid gap-6 lg:grid-cols-3">
         <SectionCard
-          title="Quick actions"
-          description="Common administrative entry points."
+          title="Hızlı İşlemler"
+          description="Sık kullanılan yönetim giriş noktaları."
           className="lg:col-span-1"
         >
           <div className="divide-y divide-neutral-100">
@@ -230,8 +231,8 @@ export default async function AdminDashboardPage() {
         </SectionCard>
 
         <SectionCard
-          title="Recent activity"
-          description="Latest audit log entries scoped to this organization."
+          title="Son Etkinlik"
+          description="Bu kuruma ait son denetim kayıtları."
           className="lg:col-span-1"
         >
           {data.recentAuditLogs.length > 0 ? (
@@ -275,8 +276,8 @@ export default async function AdminDashboardPage() {
             </div>
           ) : (
             <EmptyState
-              title="No activity yet"
-              description="Audit log events will appear here after admin actions are recorded."
+              title="Henüz etkinlik yok"
+              description="Yönetici işlemleri kaydedildikten sonra denetim kayıtları burada görünecek."
               icon={<Clock3 className="h-5 w-5" aria-hidden="true" />}
               className="min-h-40"
             />
@@ -284,8 +285,8 @@ export default async function AdminDashboardPage() {
         </SectionCard>
 
         <SectionCard
-          title="System status"
-          description="Implementation readiness across core foundations."
+          title="Sistem Durumu"
+          description="Temel ürün alanlarının hazırlık durumu."
           className="lg:col-span-1"
         >
           <div className="space-y-3">

@@ -3,52 +3,52 @@ import type { NavigationItem, RoleNavigation } from "@/types/navigation";
 
 export const publicNavigation: NavigationItem[] = [
   {
-    title: "Features",
+    title: "Özellikler",
     href: routes.public.features,
   },
   {
-    title: "Privacy",
+    title: "Gizlilik",
     href: routes.public.privacy,
   },
   {
-    title: "Terms",
+    title: "Koşullar",
     href: routes.public.terms,
   },
 ];
 
 export const adminNavigation: RoleNavigation = {
   role: "admin",
-  label: "Admin",
+  label: "Yönetim",
   homeHref: routes.admin.dashboard,
   items: [
     {
-      title: "Dashboard",
+      title: "Panel",
       href: routes.admin.dashboard,
-      description: "Operational overview",
+      description: "Operasyon özeti",
       icon: "dashboard",
     },
     {
-      title: "Sessions",
+      title: "Yoklama Oturumları",
       href: routes.admin.sessions,
-      description: "Manage attendance sessions",
+      description: "Yoklama oturumlarını yönetin",
       icon: "sessions",
     },
     {
-      title: "Users",
+      title: "Kullanıcılar",
       href: routes.admin.users,
-      description: "Manage people and roles",
+      description: "Kişileri ve rolleri yönetin",
       icon: "users",
     },
     {
-      title: "Reports",
+      title: "Raporlar",
       href: routes.admin.reports,
-      description: "Review attendance outcomes",
+      description: "Yoklama sonuçlarını inceleyin",
       icon: "reports",
     },
     {
-      title: "Settings",
+      title: "Ayarlar",
       href: routes.admin.settings,
-      description: "Workspace configuration",
+      description: "Çalışma alanı ayarları",
       icon: "settings",
     },
   ],
@@ -56,19 +56,19 @@ export const adminNavigation: RoleNavigation = {
 
 export const instructorNavigation: RoleNavigation = {
   role: "instructor",
-  label: "Instructor",
+  label: "Öğretmen",
   homeHref: routes.instructor.dashboard,
   items: [
     {
-      title: "Dashboard",
+      title: "Panel",
       href: routes.instructor.dashboard,
-      description: "Teaching overview",
+      description: "Ders özeti",
       icon: "dashboard",
     },
     {
-      title: "Sessions",
+      title: "Yoklama Oturumları",
       href: routes.instructor.sessions,
-      description: "Session attendance tools",
+      description: "Yoklama araçları",
       icon: "sessions",
     },
   ],
@@ -76,25 +76,25 @@ export const instructorNavigation: RoleNavigation = {
 
 export const studentNavigation: RoleNavigation = {
   role: "student",
-  label: "Student",
+  label: "Öğrenci",
   homeHref: routes.student.scan,
   items: [
     {
-      title: "Scan",
+      title: "QR Okut",
       href: routes.student.scan,
-      description: "Check in with a QR code",
+      description: "QR kod ile yoklamaya katıl",
       icon: "scan",
     },
     {
-      title: "History",
+      title: "Geçmiş",
       href: routes.student.attendance,
-      description: "Attendance record",
+      description: "Yoklama kayıtları",
       icon: "history",
     },
     {
-      title: "Profile",
+      title: "Profil",
       href: routes.student.profile,
-      description: "Student information",
+      description: "Öğrenci bilgileri",
       icon: "profile",
     },
   ],

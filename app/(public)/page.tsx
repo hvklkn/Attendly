@@ -10,15 +10,14 @@ export default function LandingPage() {
   return (
     <div className="mx-auto flex max-w-6xl flex-col gap-10 px-4 py-12 sm:px-6 lg:px-8">
       <section className="py-8">
-        <StatusBadge label="Initial SaaS scaffold" tone="success" />
+        <StatusBadge label="Türkiye için QR yoklama" tone="success" />
         <div className="mt-6 max-w-3xl">
           <h1 className="text-4xl font-semibold tracking-normal text-neutral-950 sm:text-5xl">
             Attendly
           </h1>
           <p className="mt-5 text-lg leading-8 text-neutral-600">
-            Multi-tenant QR attendance and participation management for
-            universities, training centers, academies, and internal learning
-            teams.
+            Okullar, kurslar ve kurum içi eğitimler için QR, öğrenci kimliği
+            ve konum doğrulamasını birleştiren yoklama yönetimi.
           </p>
         </div>
         <div className="mt-8 flex flex-wrap gap-3">
@@ -26,65 +25,65 @@ export default function LandingPage() {
             href={routes.public.login}
             className="rounded-md bg-neutral-950 px-5 py-3 text-sm font-medium text-white transition hover:bg-neutral-800"
           >
-            Login
+            Giriş Yap
           </Link>
           <Link
             href={routes.public.features}
             className="rounded-md border border-neutral-300 bg-white px-5 py-3 text-sm font-medium text-neutral-700 transition hover:border-neutral-400 hover:text-neutral-950"
           >
-            View features
+            Özellikleri Gör
           </Link>
         </div>
       </section>
 
       <section className="grid gap-4 md:grid-cols-3">
         <StatCard
-          label="Role areas"
+          label="Rol Alanları"
           value="3"
-          description="Admin, instructor, and student route foundations."
+          description="Yönetim, öğretmen ve öğrenci alanları."
         />
         <StatCard
-          label="App routes"
+          label="Uygulama Rotaları"
           value="15"
-          description="Public, auth, and protected-area placeholders."
+          description="Herkese açık, giriş ve korumalı alanlar."
         />
         <StatCard
-          label="Business logic"
+          label="İş Akışı"
           value="0"
-          description="Intentionally deferred for safe incremental work."
+          description="Güvenli adımlarla geliştirilen yoklama kuralları."
         />
       </section>
 
       <section className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
         <SectionCard
-          title="Workspace previews"
-          description="Role routes are scaffolded now and ready for auth guards later."
+          title="Çalışma Alanları"
+          description="Rol bazlı alanlar giriş koruması ile ayrıştırıldı."
         >
           <div className="grid gap-3 sm:grid-cols-3">
             <Link
               href={routes.admin.dashboard}
               className="rounded-lg border border-neutral-200 p-4 text-sm font-medium text-neutral-700 transition hover:border-neutral-400 hover:text-neutral-950"
             >
-              Admin
+              Yönetim
             </Link>
             <Link
               href={routes.instructor.dashboard}
               className="rounded-lg border border-neutral-200 p-4 text-sm font-medium text-neutral-700 transition hover:border-neutral-400 hover:text-neutral-950"
             >
-              Instructor
+              Öğretmen
             </Link>
             <Link
               href={routes.student.scan}
               className="rounded-lg border border-neutral-200 p-4 text-sm font-medium text-neutral-700 transition hover:border-neutral-400 hover:text-neutral-950"
             >
-              Student
+              Öğrenci
             </Link>
           </div>
         </SectionCard>
-        <SectionCard title="Current scope">
+        <SectionCard title="Mevcut Kapsam">
           <EmptyState
-            title="Foundation only"
-            description="This scaffold focuses on app structure, route shape, layout systems, and reusable UI pieces. Data, auth, QR scanning, and reporting will be added in later steps."
+            title="Temel akış hazır"
+            description="Oturum, QR üretimi ve öğrenci doğrulama temeli hazır. Yoklama kaydı, kamera ve konum doğrulaması sonraki adımlarda eklenecek."
           />
         </SectionCard>
       </section>

@@ -19,6 +19,12 @@ import { StatusBadge } from "@/components/ui/StatusBadge";
 import { routes } from "@/constants/routes";
 import { requireAdminAuthContext } from "@/lib/admin/auth";
 import { getAdminSessionDetailData } from "@/lib/admin/queries";
+import {
+  formatDateTimeTr,
+  getAttendanceRecordStatusLabel,
+  getAttendanceSessionStatusLabel,
+  getAttendanceSourceLabel,
+} from "@/lib/localization";
 import { AdminSessionQrTokenPanel } from "./AdminSessionQrTokenPanel";
 
 type AdminSessionDetailPageProps = {
@@ -28,14 +34,30 @@ type AdminSessionDetailPageProps = {
 };
 
 function formatDateTime(date: Date) {
-  return new Intl.DateTimeFormat("en", {
-    dateStyle: "medium",
-    timeStyle: "short",
-  }).format(date);
+  return formatDateTimeTr(date);
 }
 
 function formatEnum(value: string) {
-  return value.replaceAll("_", " ");
+  if (
+    value === "PRESENT" ||
+    value === "LATE" ||
+    value === "ABSENT" ||
+    value === "EXCUSED" ||
+    value === "REJECTED" ||
+    value === "MANUAL"
+  ) {
+    return getAttendanceRecordStatusLabel(value);
+  }
+
+  if (
+    value === "QR_SCAN" ||
+    value === "MANUAL_ENTRY" ||
+    value === "SYSTEM_GENERATED"
+  ) {
+    return getAttendanceSourceLabel(value);
+  }
+
+  return getAttendanceSessionStatusLabel(value);
 }
 
 function formatDuration(startTime: Date, endTime: Date) {
@@ -45,15 +67,15 @@ function formatDuration(startTime: Date, endTime: Date) {
   );
 
   if (minutes < 60) {
-    return `${minutes} min`;
+    return `${minutes} dk`;
   }
 
   const hours = Math.floor(minutes / 60);
   const remainingMinutes = minutes % 60;
 
   return remainingMinutes > 0
-    ? `${hours} hr ${remainingMinutes} min`
-    : `${hours} hr`;
+    ? `${hours} sa ${remainingMinutes} dk`
+    : `${hours} sa`;
 }
 
 function formatPerson(
@@ -66,7 +88,7 @@ function formatPerson(
     | undefined,
 ) {
   if (!user) {
-    return "Unassigned";
+    return "Atanmadı";
   }
 
   return user.name ? `${user.name} · ${user.email}` : user.email;
@@ -130,105 +152,105 @@ export default async function AdminSessionDetailPage({
     data.attendanceRate === null ? "--" : `${data.attendanceRate}%`;
 
   const overviewItems = [
-    { label: "Description", value: session.description ?? "No description" },
-    { label: "Created by", value: creator },
-    { label: "Created", value: formatDateTime(session.createdAt) },
-    { label: "Updated", value: formatDateTime(session.updatedAt) },
+    { label: "Açıklama", value: session.description ?? "Açıklama yok" },
+    { label: "Oluşturan", value: creator },
+    { label: "Oluşturuldu", value: formatDateTime(session.createdAt) },
+    { label: "Güncellendi", value: formatDateTime(session.updatedAt) },
     {
-      label: "Late threshold",
-      value: `${session.lateThresholdMinutes} minutes`,
+      label: "Geç kalma eşiği",
+      value: `${session.lateThresholdMinutes} dakika`,
     },
   ];
 
   const scheduleItems = [
-    { label: "Starts", value: formatDateTime(session.startTime) },
-    { label: "Ends", value: formatDateTime(session.endTime) },
+    { label: "Başlangıç", value: formatDateTime(session.startTime) },
+    { label: "Bitiş", value: formatDateTime(session.endTime) },
     {
-      label: "Duration",
+      label: "Süre",
       value: formatDuration(session.startTime, session.endTime),
     },
-    { label: "Status", value: formatEnum(session.status) },
+    { label: "Durum", value: formatEnum(session.status) },
   ];
 
   const sectionItems = [
     {
-      label: "Course",
+      label: "Ders",
       value: `${session.section.course.code} · ${session.section.course.title}`,
     },
     {
-      label: "Section",
+      label: "Şube",
       value: session.section.code
         ? `${session.section.code} · ${session.section.name}`
         : session.section.name,
     },
-    { label: "Instructor", value: instructor },
+    { label: "Öğretmen", value: instructor },
     {
-      label: "Enrolled",
+      label: "Kayıtlı Öğrenci",
       value: String(session.section._count.enrollments),
     },
     {
-      label: "Section status",
-      value: session.section.isActive ? "Active" : "Inactive",
+      label: "Şube Durumu",
+      value: session.section.isActive ? "Aktif" : "Pasif",
     },
   ];
 
   const roomItems = session.room
     ? [
         {
-          label: "Room",
+          label: "Oda",
           value: session.room.code
             ? `${session.room.code} · ${session.room.name}`
             : session.room.name,
         },
-        { label: "Description", value: session.room.description ?? "None" },
-        { label: "Address", value: session.room.address ?? "Not set" },
+        { label: "Açıklama", value: session.room.description ?? "Yok" },
+        { label: "Adres", value: session.room.address ?? "Belirtilmedi" },
         {
-          label: "Allowed radius",
+          label: "İzin verilen yarıçap",
           value:
             session.room.allowedRadiusMeters === null
-              ? "Not set"
-              : `${session.room.allowedRadiusMeters} meters`,
+              ? "Belirtilmedi"
+              : `${session.room.allowedRadiusMeters} metre`,
         },
         {
-          label: "Geolocation",
+          label: "Konum",
           value:
             session.room.latitude && session.room.longitude
               ? `${session.room.latitude.toString()}, ${session.room.longitude.toString()}`
-              : "Not set",
+              : "Belirtilmedi",
         },
       ]
     : [];
 
   const summaryStats = [
     {
-      label: "Attendance records",
+      label: "Yoklama Kayıtları",
       value: String(session._count.attendanceRecords),
-      trend: "Stored",
-      description: "Records captured for this attendance session.",
+      trend: "Kayıtlı",
+      description: "Bu yoklama oturumu için saklanan kayıtlar.",
       icon: <ListChecks className="h-4 w-4" aria-hidden="true" />,
       tone: "info" as const,
     },
     {
-      label: "Attended",
+      label: "Katılan",
       value: String(data.attendedRecords),
-      trend: "Present/late/manual",
-      description: "Read-only count of attendance-positive statuses.",
+      trend: "Katıldı/geç/manuel",
+      description: "Olumlu sayılan yoklama durumlarının toplamı.",
       icon: <CheckCircle2 className="h-4 w-4" aria-hidden="true" />,
       tone: "success" as const,
     },
     {
-      label: "Attendance rate",
+      label: "Katılım Oranı",
       value: attendanceRate,
-      trend: data.attendanceRate === null ? "No records" : "Recorded",
-      description: "Positive attendance records over total records.",
+      trend: data.attendanceRate === null ? "Kayıt yok" : "Kayıtlı",
+      description: "Olumlu yoklama kayıtlarının toplam kayıtlara oranı.",
       icon: <Users className="h-4 w-4" aria-hidden="true" />,
       tone: "neutral" as const,
     },
     {
-      label: "QR tokens",
+      label: "QR Anahtarları",
       value: String(session._count.qrTokens),
-      trend: latestQrToken ? "Latest loaded" : "None yet",
-      description: "Token history count without exposing token values.",
+      trend: latestQrToken ? "Son QR yüklendi" : "Henüz yok",
+      description: "Ham değerler gösterilmeden QR geçmişi sayısı.",
       icon: <QrCode className="h-4 w-4" aria-hidden="true" />,
       tone: "warning" as const,
     },
@@ -245,7 +267,7 @@ export default async function AdminSessionDetailPage({
           href={routes.admin.sessions}
           icon={<ArrowLeft className="h-4 w-4" aria-hidden="true" />}
         >
-          Back
+          Geri
         </ButtonLink>
         <StatusBadge
           label={formatEnum(session.status)}
@@ -261,8 +283,8 @@ export default async function AdminSessionDetailPage({
 
       <section className="grid gap-6 xl:grid-cols-[1fr_0.85fr]">
         <SectionCard
-          title="Overview"
-          description="Core read-only metadata for this attendance session."
+          title="Genel Bakış"
+          description="Bu yoklama oturumu için temel salt okunur bilgiler."
           actions={
             <div className="flex h-9 w-9 items-center justify-center rounded-md bg-neutral-100 text-neutral-600">
               <Clock3 className="h-4 w-4" aria-hidden="true" />
@@ -273,8 +295,8 @@ export default async function AdminSessionDetailPage({
         </SectionCard>
 
         <SectionCard
-          title="Schedule"
-          description="Timing details used by attendance and late policies."
+          title="Takvim"
+          description="Yoklama ve geç kalma kuralları için zaman bilgileri."
           actions={
             <div className="flex h-9 w-9 items-center justify-center rounded-md bg-neutral-100 text-neutral-600">
               <CalendarClock className="h-4 w-4" aria-hidden="true" />
@@ -287,8 +309,8 @@ export default async function AdminSessionDetailPage({
 
       <section className="grid gap-6 xl:grid-cols-2">
         <SectionCard
-          title="Course and section"
-          description="Academic or training context attached to this session."
+          title="Ders ve Şube"
+          description="Bu oturuma bağlı akademik veya eğitim bağlamı."
           actions={
             <div className="flex h-9 w-9 items-center justify-center rounded-md bg-neutral-100 text-neutral-600">
               <UserRound className="h-4 w-4" aria-hidden="true" />
@@ -299,8 +321,8 @@ export default async function AdminSessionDetailPage({
         </SectionCard>
 
         <SectionCard
-          title="Room and location"
-          description="Physical location metadata for room-aware attendance."
+          title="Oda ve Konum"
+          description="Konum duyarlı yoklama için fiziksel konum bilgileri."
           actions={
             <div className="flex h-9 w-9 items-center justify-center rounded-md bg-neutral-100 text-neutral-600">
               <MapPin className="h-4 w-4" aria-hidden="true" />
@@ -311,8 +333,8 @@ export default async function AdminSessionDetailPage({
             <DetailList items={roomItems} />
           ) : (
             <EmptyState
-              title="No room assigned"
-              description="Room and geolocation details will appear here when the session is tied to a room."
+              title="Oda atanmadı"
+              description="Oturum bir odaya bağlandığında oda ve konum bilgileri burada görünecek."
               icon={<MapPin className="h-5 w-5" aria-hidden="true" />}
               className="min-h-40"
             />
@@ -337,8 +359,8 @@ export default async function AdminSessionDetailPage({
         />
 
         <SectionCard
-          title="Attendance summary"
-          description="Stored attendance records grouped by status."
+          title="Yoklama Özeti"
+          description="Duruma göre gruplanmış kayıtlı yoklama verileri."
         >
           {data.attendanceStatusCounts.length > 0 ? (
             <div className="divide-y divide-neutral-100">
@@ -359,8 +381,8 @@ export default async function AdminSessionDetailPage({
             </div>
           ) : (
             <EmptyState
-              title="No attendance records"
-              description="Attendance status counts will appear after records exist for this session."
+              title="Yoklama kaydı yok"
+              description="Bu oturum için kayıtlar oluştuğunda durum sayıları burada görünecek."
               icon={<ListChecks className="h-5 w-5" aria-hidden="true" />}
               className="min-h-40"
             />
@@ -369,8 +391,8 @@ export default async function AdminSessionDetailPage({
       </section>
 
       <SectionCard
-        title="Recent attendance records"
-        description="Latest stored records for this session, shown without mutation controls."
+        title="Son Yoklama Kayıtları"
+        description="Bu oturum için son kayıtlar; değişiklik kontrolü olmadan gösterilir."
       >
         {session.attendanceRecords.length > 0 ? (
           <>
@@ -378,11 +400,11 @@ export default async function AdminSessionDetailPage({
               <table className="w-full border-collapse text-left text-sm">
                 <thead className="bg-neutral-50 text-xs font-medium uppercase tracking-normal text-neutral-500">
                   <tr>
-                    <th className="px-4 py-3">Student</th>
-                    <th className="px-4 py-3">Status</th>
-                    <th className="px-4 py-3">Source</th>
-                    <th className="px-4 py-3">Checked in</th>
-                    <th className="px-4 py-3">Accuracy</th>
+                    <th className="px-4 py-3">Öğrenci</th>
+                    <th className="px-4 py-3">Durum</th>
+                    <th className="px-4 py-3">Kaynak</th>
+                    <th className="px-4 py-3">Katılım</th>
+                    <th className="px-4 py-3">Doğruluk</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-neutral-100 bg-white">
@@ -390,7 +412,7 @@ export default async function AdminSessionDetailPage({
                     <tr key={record.id}>
                       <td className="px-4 py-4">
                         <p className="font-medium text-neutral-950">
-                          {record.studentUser.name ?? "Unnamed user"}
+                          {record.studentUser.name ?? "İsimsiz kullanıcı"}
                         </p>
                         <p className="mt-1 text-xs text-neutral-500">
                           {record.studentUser.email}
@@ -408,11 +430,11 @@ export default async function AdminSessionDetailPage({
                       <td className="px-4 py-4 text-neutral-600">
                         {record.checkedInAt
                           ? formatDateTime(record.checkedInAt)
-                          : "Not checked in"}
+                          : "Henüz katılmadı"}
                       </td>
                       <td className="px-4 py-4 text-neutral-600">
                         {record.locationAccuracyMeters === null
-                          ? "Not set"
+                          ? "Belirtilmedi"
                           : `${record.locationAccuracyMeters} m`}
                       </td>
                     </tr>
@@ -430,7 +452,7 @@ export default async function AdminSessionDetailPage({
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
                       <p className="font-medium text-neutral-950">
-                        {record.studentUser.name ?? "Unnamed user"}
+                        {record.studentUser.name ?? "İsimsiz kullanıcı"}
                       </p>
                       <p className="mt-1 truncate text-sm text-neutral-500">
                         {record.studentUser.email}
@@ -443,17 +465,17 @@ export default async function AdminSessionDetailPage({
                   </div>
                   <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-2">
                     <div>
-                      <dt className="text-neutral-500">Source</dt>
+                      <dt className="text-neutral-500">Kaynak</dt>
                       <dd className="mt-1 font-medium text-neutral-900">
                         {formatEnum(record.source)}
                       </dd>
                     </div>
                     <div>
-                      <dt className="text-neutral-500">Checked in</dt>
+                      <dt className="text-neutral-500">Katılım</dt>
                       <dd className="mt-1 font-medium text-neutral-900">
                         {record.checkedInAt
                           ? formatDateTime(record.checkedInAt)
-                          : "Not checked in"}
+                          : "Henüz katılmadı"}
                       </dd>
                     </div>
                   </dl>
@@ -463,8 +485,8 @@ export default async function AdminSessionDetailPage({
           </>
         ) : (
           <EmptyState
-            title="No attendance records"
-            description="Recent attendance records will appear here after this session has stored attendance data."
+            title="Yoklama kaydı yok"
+            description="Bu oturumda yoklama verisi oluştuğunda son kayıtlar burada görünecek."
             icon={<ListChecks className="h-5 w-5" aria-hidden="true" />}
           />
         )}

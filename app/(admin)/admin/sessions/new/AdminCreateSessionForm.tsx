@@ -76,7 +76,7 @@ function SubmitButton({ disabled }: { disabled: boolean }) {
       disabled={disabled || pending}
       className="inline-flex h-9 items-center justify-center rounded-md bg-neutral-950 px-4 text-sm font-medium text-white transition hover:bg-neutral-800 disabled:cursor-not-allowed disabled:bg-neutral-200 disabled:text-neutral-500"
     >
-      {pending ? "Creating..." : "Create session"}
+      {pending ? "Oluşturuluyor..." : "Oturum Oluştur"}
     </button>
   );
 }
@@ -106,22 +106,22 @@ export function AdminCreateSessionForm({
     <>
       {!hasRequiredData ? (
         <SectionCard
-          title="Prerequisites needed"
-          description="A session must be attached to an active section before it can be created."
+          title="Ön koşullar eksik"
+          description="Oturum oluşturmak için aktif bir şube gerekir."
         >
           <div className="grid gap-4 md:grid-cols-2">
             {!hasCourses ? (
               <EmptyState
-                title="No active courses"
-                description="Create or activate at least one course before building attendance sessions."
+                title="Aktif ders yok"
+                description="Yoklama oturumu oluşturmadan önce en az bir dersi aktif hale getirin."
                 icon={<BookOpen className="h-5 w-5" aria-hidden="true" />}
                 className="min-h-40"
               />
             ) : null}
             {!hasSections ? (
               <EmptyState
-                title="No active sections"
-                description="Create or activate at least one section so attendance sessions have a roster context."
+                title="Aktif şube yok"
+                description="Yoklama oturumlarının liste bağlamı olması için en az bir şubeyi aktif hale getirin."
                 icon={<Users className="h-5 w-5" aria-hidden="true" />}
                 className="min-h-40"
               />
@@ -142,8 +142,8 @@ export function AdminCreateSessionForm({
           ) : null}
 
           <SectionCard
-            title="Basic information"
-            description="High-level details that identify the attendance window."
+            title="Temel Bilgiler"
+            description="Yoklama zaman aralığını tanımlayan bilgiler."
             actions={
               <div className="flex h-9 w-9 items-center justify-center rounded-md bg-neutral-100 text-neutral-600">
                 <ClipboardCheck className="h-4 w-4" aria-hidden="true" />
@@ -153,7 +153,7 @@ export function AdminCreateSessionForm({
             <div className="grid gap-5">
               <Field
                 id="session-title"
-                label="Title"
+                label="Başlık"
                 error={getFieldError(errors, "title")}
               >
                 <input
@@ -161,7 +161,7 @@ export function AdminCreateSessionForm({
                   name="title"
                   type="text"
                   required
-                  placeholder="Data Structures Lab"
+                  placeholder="Veri Yapıları Laboratuvarı"
                   disabled={!hasRequiredData}
                   defaultValue={values.title}
                   aria-invalid={Boolean(getFieldError(errors, "title"))}
@@ -173,12 +173,12 @@ export function AdminCreateSessionForm({
                   className={inputClassName}
                 />
               </Field>
-              <Field id="session-description" label="Description">
+              <Field id="session-description" label="Açıklama">
                 <textarea
                   id="session-description"
                   name="description"
                   rows={4}
-                  placeholder="Optional note for administrators and instructors"
+                  placeholder="Yönetici ve öğretmenler için isteğe bağlı not"
                   disabled={!hasRequiredData}
                   defaultValue={values.description}
                   className={inputClassName}
@@ -188,8 +188,8 @@ export function AdminCreateSessionForm({
           </SectionCard>
 
           <SectionCard
-            title="Academic relation"
-            description="Select the course context and the section that owns this session."
+            title="Ders İlişkisi"
+            description="Oturumun bağlı olduğu ders ve şubeyi seçin."
             actions={
               <div className="flex h-9 w-9 items-center justify-center rounded-md bg-neutral-100 text-neutral-600">
                 <BookOpen className="h-4 w-4" aria-hidden="true" />
@@ -199,8 +199,8 @@ export function AdminCreateSessionForm({
             <div className="grid gap-5 md:grid-cols-2">
               <Field
                 id="course-id"
-                label="Course"
-                description="The selected section remains the authoritative relation in the current schema."
+                label="Ders"
+                description="Geçerli şemada şube, oturumun asıl ilişkisidir."
                 error={getFieldError(errors, "courseId")}
               >
                 <select
@@ -217,7 +217,7 @@ export function AdminCreateSessionForm({
                   className={selectClassName}
                 >
                   <option value="" disabled>
-                    Select a course
+                    Ders seçin
                   </option>
                   {options.courses.map((course) => (
                     <option key={course.id} value={course.id}>
@@ -229,8 +229,8 @@ export function AdminCreateSessionForm({
 
               <Field
                 id="section-id"
-                label="Section"
-                description="The create mutation validates that the section belongs to this organization."
+                label="Şube"
+                description="Oluşturma işlemi şubenin bu kuruma ait olduğunu doğrular."
                 error={getFieldError(errors, "sectionId")}
               >
                 <select
@@ -248,12 +248,12 @@ export function AdminCreateSessionForm({
                   className={selectClassName}
                 >
                   <option value="" disabled>
-                    Select a section
+                    Şube seçin
                   </option>
                   {options.sections.map((section) => (
                     <option key={section.id} value={section.id}>
                       {section.course.code} · {section.name} ·{" "}
-                      {section._count.enrollments} enrolled
+                      {section._count.enrollments} kayıtlı
                     </option>
                   ))}
                 </select>
@@ -261,8 +261,8 @@ export function AdminCreateSessionForm({
 
               <Field
                 id="instructor-membership-id"
-                label="Instructor"
-                description="Sections already carry instructor assignment; this field is staged for future validation and review."
+                label="Öğretmen"
+                description="Şubeler öğretmen atamasını zaten taşır; bu alan ilerideki doğrulama için hazır tutulur."
               >
                 <select
                   id="instructor-membership-id"
@@ -271,7 +271,7 @@ export function AdminCreateSessionForm({
                   className={selectClassName}
                 >
                   <option value="">
-                    {hasInstructors ? "Use section instructor" : "No instructors"}
+                    {hasInstructors ? "Şube öğretmenini kullan" : "Öğretmen yok"}
                   </option>
                   {options.instructors.map((membership) => (
                     <option key={membership.id} value={membership.id}>
@@ -284,8 +284,8 @@ export function AdminCreateSessionForm({
           </SectionCard>
 
           <SectionCard
-            title="Schedule"
-            description="Timing fields are validated on the server before the session is created."
+            title="Takvim"
+            description="Zaman alanları oturum oluşturulmadan önce sunucuda doğrulanır."
             actions={
               <div className="flex h-9 w-9 items-center justify-center rounded-md bg-neutral-100 text-neutral-600">
                 <CalendarClock className="h-4 w-4" aria-hidden="true" />
@@ -295,7 +295,7 @@ export function AdminCreateSessionForm({
             <div className="grid gap-5 md:grid-cols-3">
               <Field
                 id="start-time"
-                label="Start time"
+                label="Başlangıç zamanı"
                 error={getFieldError(errors, "startTime")}
               >
                 <input
@@ -316,7 +316,7 @@ export function AdminCreateSessionForm({
               </Field>
               <Field
                 id="end-time"
-                label="End time"
+                label="Bitiş zamanı"
                 error={getFieldError(errors, "endTime")}
               >
                 <input
@@ -337,8 +337,8 @@ export function AdminCreateSessionForm({
               </Field>
               <Field
                 id="late-threshold-minutes"
-                label="Late threshold"
-                description="Stored in minutes on the attendance session."
+                label="Geç kalma eşiği"
+                description="Yoklama oturumunda dakika cinsinden saklanır."
                 error={getFieldError(errors, "lateThresholdMinutes")}
               >
                 <input
@@ -365,8 +365,8 @@ export function AdminCreateSessionForm({
           </SectionCard>
 
           <SectionCard
-            title="Location"
-            description="Rooms are optional in the schema, but choosing one prepares location-aware attendance checks later."
+            title="Konum"
+            description="Oda seçimi isteğe bağlıdır; seçildiğinde konum doğrulaması için temel hazırlar."
             actions={
               <div className="flex h-9 w-9 items-center justify-center rounded-md bg-neutral-100 text-neutral-600">
                 <MapPin className="h-4 w-4" aria-hidden="true" />
@@ -376,8 +376,8 @@ export function AdminCreateSessionForm({
             <div className="grid gap-5">
               <Field
                 id="room-id"
-                label="Room"
-                description="Allowed radius and room metadata will be used by future check-in validation."
+                label="Oda"
+                description="Yarıçap ve oda bilgileri sonraki yoklama doğrulamasında kullanılacak."
                 error={getFieldError(errors, "roomId")}
               >
                 <select
@@ -392,7 +392,7 @@ export function AdminCreateSessionForm({
                   className={selectClassName}
                 >
                   <option value="">
-                    {hasRooms ? "No room selected" : "No active rooms"}
+                    {hasRooms ? "Oda seçilmedi" : "Aktif oda yok"}
                   </option>
                   {options.rooms.map((room) => (
                     <option key={room.id} value={room.id}>
@@ -408,8 +408,8 @@ export function AdminCreateSessionForm({
 
               {!hasRooms ? (
                 <EmptyState
-                  title="No active rooms"
-                  description="Room selection is optional for the current schema. Room records can be added later for location-aware attendance."
+                  title="Aktif oda yok"
+                  description="Oda seçimi şu an isteğe bağlıdır. Konum bazlı yoklama için oda kayıtları daha sonra eklenebilir."
                   icon={<MapPin className="h-5 w-5" aria-hidden="true" />}
                   className="min-h-36"
                 />
@@ -420,11 +420,10 @@ export function AdminCreateSessionForm({
           <div className="flex flex-col gap-3 rounded-lg border border-neutral-200 bg-white p-5 shadow-subtle sm:flex-row sm:items-center sm:justify-between">
             <div>
               <p className="text-sm font-medium text-neutral-950">
-                Ready to create
+                Oluşturmaya hazır
               </p>
               <p className="mt-1 text-sm text-neutral-600">
-                The server will validate the form and create a session in this
-                organization.
+                Sunucu formu doğrular ve bu kurum içinde oturumu oluşturur.
               </p>
             </div>
             <SubmitButton disabled={!hasRequiredData} />
@@ -433,8 +432,8 @@ export function AdminCreateSessionForm({
 
         <aside className="grid gap-6 self-start">
           <SectionCard
-            title="Readiness"
-            description="Live prerequisite data for this organization."
+            title="Hazırlık"
+            description="Bu kurum için canlı ön koşul verileri."
             actions={
               <div className="flex h-9 w-9 items-center justify-center rounded-md bg-neutral-100 text-neutral-600">
                 <Info className="h-4 w-4" aria-hidden="true" />
@@ -444,7 +443,7 @@ export function AdminCreateSessionForm({
             <div className="space-y-3">
               <div className="flex items-center justify-between gap-3">
                 <span className="text-sm font-medium text-neutral-700">
-                  Courses
+                  Dersler
                 </span>
                 <StatusBadge
                   label={String(options.courses.length)}
@@ -453,7 +452,7 @@ export function AdminCreateSessionForm({
               </div>
               <div className="flex items-center justify-between gap-3">
                 <span className="text-sm font-medium text-neutral-700">
-                  Sections
+                  Şubeler
                 </span>
                 <StatusBadge
                   label={String(options.sections.length)}
@@ -462,7 +461,7 @@ export function AdminCreateSessionForm({
               </div>
               <div className="flex items-center justify-between gap-3">
                 <span className="text-sm font-medium text-neutral-700">
-                  Rooms
+                  Odalar
                 </span>
                 <StatusBadge
                   label={String(options.rooms.length)}
@@ -471,7 +470,7 @@ export function AdminCreateSessionForm({
               </div>
               <div className="flex items-center justify-between gap-3">
                 <span className="text-sm font-medium text-neutral-700">
-                  Instructors
+                  Öğretmenler
                 </span>
                 <StatusBadge
                   label={String(options.instructors.length)}
@@ -482,21 +481,21 @@ export function AdminCreateSessionForm({
           </SectionCard>
 
           <SectionCard
-            title="Mutation checks"
-            description="What the server verifies before persistence."
+            title="Sunucu Kontrolleri"
+            description="Kaydetmeden önce doğrulanan kurallar."
           >
             <div className="space-y-4 text-sm leading-6 text-neutral-600">
               <div className="flex gap-3">
                 <Clock3 className="mt-1 h-4 w-4 shrink-0 text-neutral-500" />
-                <p>Start time must be before end time.</p>
+                <p>Başlangıç zamanı bitiş zamanından önce olmalıdır.</p>
               </div>
               <div className="flex gap-3">
                 <BookOpen className="mt-1 h-4 w-4 shrink-0 text-neutral-500" />
-                <p>Section ownership is checked against this organization.</p>
+                <p>Şube sahipliği bu kurum üzerinden kontrol edilir.</p>
               </div>
               <div className="flex gap-3">
                 <MapPin className="mt-1 h-4 w-4 shrink-0 text-neutral-500" />
-                <p>Room is optional and only attached after ownership checks.</p>
+                <p>Oda isteğe bağlıdır ve sahiplik kontrolünden sonra bağlanır.</p>
               </div>
             </div>
           </SectionCard>
