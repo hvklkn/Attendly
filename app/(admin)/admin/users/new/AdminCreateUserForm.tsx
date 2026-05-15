@@ -247,11 +247,11 @@ export function AdminCreateUserForm({
                   const sectionName = section.code
                     ? `${section.code} · ${section.name}`
                     : section.name;
-                  const instructor = section.instructorMembership?.user
+                  const responsiblePerson = section.instructorMembership?.user
                     ? section.instructorMembership.user.name
                       ? `${section.instructorMembership.user.name} · ${section.instructorMembership.user.email}`
                       : section.instructorMembership.user.email
-                    : "Öğretmen henüz atanmadı";
+                    : "Sorumlu kişi henüz atanmadı";
 
                   return (
                     <label
@@ -270,7 +270,7 @@ export function AdminCreateUserForm({
                           {section.course.code} · {sectionName}
                         </span>
                         <span className="mt-1 block text-sm leading-6 text-neutral-600">
-                          Atanmış Öğretmen: {instructor}
+                          Atanmış Sorumlu: {responsiblePerson}
                         </span>
                         <span className="mt-1 block text-xs text-neutral-500">
                           {section._count.enrollments} kayıtlı öğrenci

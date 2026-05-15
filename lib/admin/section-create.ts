@@ -6,7 +6,7 @@ export type AdminSectionCreateOptionsData = {
     code: string;
     title: string;
   }>;
-  instructors: Array<{
+  responsibleCandidates: Array<{
     id: string;
     role: MembershipRole;
     user: {
@@ -128,7 +128,7 @@ export function validateAdminSectionCreateFormValues(
   }
 
   if (!instructorMembershipId) {
-    errors.instructorMembershipId = "Öğretmen seçilmelidir.";
+    errors.instructorMembershipId = "Sorumlu kişi seçilmelidir.";
   }
 
   if (Object.keys(errors).length > 0) {

@@ -35,6 +35,7 @@ export type AdminSessionCreateOptionsData = {
     };
     instructorMembership: {
       id: string;
+      role: string;
       user: {
         name: string | null;
         email: string;
@@ -51,7 +52,7 @@ export type AdminSessionCreateOptionsData = {
     address: string | null;
     allowedRadiusMeters: number | null;
   }>;
-  instructors: Array<{
+  responsibleCandidates: Array<{
     id: string;
     role: string;
     user: {

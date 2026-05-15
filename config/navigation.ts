@@ -28,6 +28,12 @@ export const adminNavigation: RoleNavigation = {
       icon: "dashboard",
     },
     {
+      title: "Dersler / Kurslar",
+      href: routes.admin.courses,
+      description: "Ders ve kurs kataloğu",
+      icon: "courses",
+    },
+    {
       title: "Yoklama Oturumları",
       href: routes.admin.sessions,
       description: "Yoklama oturumlarını yönetin",

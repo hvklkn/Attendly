@@ -10,6 +10,8 @@ export const routes = {
   admin: {
     root: "/admin",
     dashboard: "/admin/dashboard",
+    courses: "/admin/courses",
+    courseCreate: "/admin/courses/new",
     sessions: "/admin/sessions",
     sessionCreate: "/admin/sessions/new",
     sessionDetail: "/admin/sessions/session-id",

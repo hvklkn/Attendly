@@ -2,9 +2,10 @@ import "server-only";
 
 import {
   AttendanceSessionStatus,
-  MembershipRole,
+  UserStatus,
 } from "@/lib/generated/prisma/enums";
 import { getAdminOrganizationId, type AdminAuthContext } from "@/lib/admin/auth";
+import { isSectionResponsibleRole } from "@/lib/admin/section-responsible";
 import { db } from "@/lib/db";
 import {
   issueAttendanceSessionQrToken,
@@ -51,6 +52,11 @@ export async function createAdminAttendanceSession(
             id: true,
             role: true,
             userId: true,
+            user: {
+              select: {
+                status: true,
+              },
+            },
           },
         },
       },
@@ -78,19 +84,20 @@ export async function createAdminAttendanceSession(
 
     if (
       !section.instructorMembership ||
-      section.instructorMembership.role !== MembershipRole.INSTRUCTOR
+      !isSectionResponsibleRole(section.instructorMembership.role) ||
+      section.instructorMembership.user.status !== UserStatus.ACTIVE
     ) {
       return {
         ok: false,
         message:
-          "Bu ders grubuna atanmış öğretmen yok. Yoklama oturumu oluşturmak için önce bir öğretmen atayın.",
+          "Bu ders grubuna atanmış sorumlu kişi yok. Yoklama oturumu oluşturmak için önce bir öğretmen veya yönetici atayın.",
         errors: {
-          sectionId: "Bu ders grubuna atanmış öğretmen yok.",
+          sectionId: "Bu ders grubuna atanmış sorumlu kişi yok.",
         },
       };
     }
 
-    const instructorMembership = section.instructorMembership;
+    const responsibleMembership = section.instructorMembership;
 
     if (
       input.instructorMembershipId &&
@@ -98,11 +105,11 @@ export async function createAdminAttendanceSession(
     ) {
       return {
         ok: false,
-        message: "Seçilen öğretmen ders grubunun atanmış öğretmeni değil.",
+        message: "Ders grubu ve sorumlu kişi eşleşmiyor.",
         errors: {
           instructorMembershipId:
-            "Ders grubuna atanmış öğretmeni seçin.",
-          sectionId: "Ders grubu ve öğretmen eşleşmiyor.",
+            "Ders grubuna atanmış sorumlu kişiyi seçin.",
+          sectionId: "Ders grubu ve sorumlu kişi eşleşmiyor.",
         },
       };
     }
@@ -176,13 +183,14 @@ export async function createAdminAttendanceSession(
         data: {
           organizationId,
           actorUserId: authContext.user.id,
-          action: "attendance_session.created_by_admin_for_instructor",
+          action: "attendance_session.created",
           targetType: "AttendanceSession",
           targetId: createdSession.id,
           metadata: {
             sectionId: section.id,
-            instructorMembershipId: instructorMembership.id,
-            instructorUserId: instructorMembership.userId,
+            responsibleMembershipId: responsibleMembership.id,
+            responsibleUserId: responsibleMembership.userId,
+            responsibleRole: responsibleMembership.role,
           },
         },
       });

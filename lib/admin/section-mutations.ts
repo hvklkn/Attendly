@@ -1,8 +1,9 @@
 import "server-only";
 
-import { MembershipRole, UserStatus } from "@/lib/generated/prisma/enums";
+import { UserStatus } from "@/lib/generated/prisma/enums";
 import { Prisma } from "@/lib/generated/prisma/client";
 import { getAdminOrganizationId, type AdminAuthContext } from "@/lib/admin/auth";
+import { isSectionResponsibleRole } from "@/lib/admin/section-responsible";
 import { db } from "@/lib/db";
 import type {
   AdminSectionCreateFormErrors,
@@ -87,19 +88,21 @@ export async function createAdminSection(
       if (!instructorMembership) {
         return {
           ok: false,
-          message: "Seçilen öğretmen kurumunuza ait değil.",
+          message: "Seçilen sorumlu kişi kurumunuza ait değil.",
           errors: {
-            instructorMembershipId: "Seçilen öğretmen kurumunuza ait değil.",
+            instructorMembershipId:
+              "Seçilen sorumlu kişi kurumunuza ait değil.",
           },
         };
       }
 
-      if (instructorMembership.role !== MembershipRole.INSTRUCTOR) {
+      if (!isSectionResponsibleRole(instructorMembership.role)) {
         return {
           ok: false,
-          message: "Bu kullanıcı öğretmen rolüne sahip değil.",
+          message: "Bu kullanıcı ders grubu sorumlusu olamaz.",
           errors: {
-            instructorMembershipId: "Bu kullanıcı öğretmen rolüne sahip değil.",
+            instructorMembershipId:
+              "Bu kullanıcı ders grubu sorumlusu olamaz.",
           },
         };
       }
@@ -107,9 +110,10 @@ export async function createAdminSection(
       if (instructorMembership.user.status !== UserStatus.ACTIVE) {
         return {
           ok: false,
-          message: "Kurumunuzdaki aktif bir öğretmeni seçin.",
+          message: "Kurumunuzdaki aktif bir öğretmen veya yönetici seçin.",
           errors: {
-            instructorMembershipId: "Kurumunuzdaki aktif bir öğretmeni seçin.",
+            instructorMembershipId:
+              "Kurumunuzdaki aktif bir öğretmen veya yönetici seçin.",
           },
         };
       }
@@ -137,7 +141,8 @@ export async function createAdminSection(
           targetId: section.id,
           metadata: {
             courseId: course.id,
-            instructorMembershipId: instructorMembership.id,
+            responsibleMembershipId: instructorMembership.id,
+            responsibleRole: instructorMembership.role,
             isActive: input.isActive,
           },
         },
@@ -147,12 +152,13 @@ export async function createAdminSection(
         data: {
           organizationId,
           actorUserId: authContext.user.id,
-          action: "section.instructor_assigned",
+          action: "section.responsible_assigned",
           targetType: "Section",
           targetId: section.id,
           metadata: {
-            instructorMembershipId: instructorMembership.id,
-            instructorUserId: instructorMembership.userId,
+            responsibleMembershipId: instructorMembership.id,
+            responsibleUserId: instructorMembership.userId,
+            responsibleRole: instructorMembership.role,
           },
         },
       });
@@ -194,7 +200,7 @@ export async function assignAdminSectionInstructor(
   if (!sectionId || !instructorMembershipId) {
     return {
       ok: false,
-      message: "Ders grubu ve öğretmen seçilmelidir.",
+      message: "Ders grubu ve sorumlu kişi seçilmelidir.",
     };
   }
 
@@ -238,21 +244,21 @@ export async function assignAdminSectionInstructor(
       if (!instructorMembership) {
         return {
           ok: false,
-          message: "Seçilen öğretmen kurumunuza ait değil.",
+          message: "Seçilen sorumlu kişi kurumunuza ait değil.",
         };
       }
 
-      if (instructorMembership.role !== MembershipRole.INSTRUCTOR) {
+      if (!isSectionResponsibleRole(instructorMembership.role)) {
         return {
           ok: false,
-          message: "Bu kullanıcı öğretmen rolüne sahip değil.",
+          message: "Bu kullanıcı ders grubu sorumlusu olamaz.",
         };
       }
 
       if (instructorMembership.user.status !== UserStatus.ACTIVE) {
         return {
           ok: false,
-          message: "Kurumunuzdaki aktif bir öğretmeni seçin.",
+          message: "Kurumunuzdaki aktif bir öğretmen veya yönetici seçin.",
         };
       }
 
@@ -275,12 +281,13 @@ export async function assignAdminSectionInstructor(
         data: {
           organizationId,
           actorUserId: authContext.user.id,
-          action: "section.instructor_assigned",
+          action: "section.responsible_assigned",
           targetType: "Section",
           targetId: section.id,
           metadata: {
-            instructorMembershipId: instructorMembership.id,
-            instructorUserId: instructorMembership.userId,
+            responsibleMembershipId: instructorMembership.id,
+            responsibleUserId: instructorMembership.userId,
+            responsibleRole: instructorMembership.role,
           },
         },
       });
@@ -293,7 +300,7 @@ export async function assignAdminSectionInstructor(
   } catch {
     return {
       ok: false,
-      message: "Öğretmen ataması şu anda yapılamadı.",
+      message: "Sorumlu kişi ataması şu anda yapılamadı.",
     };
   }
 }

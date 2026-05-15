@@ -11,6 +11,7 @@ import {
   getAdminSectionCreateOptionsData,
   getAdminSectionsData,
 } from "@/lib/admin/queries";
+import { getRoleLabel } from "@/lib/localization";
 
 type AdminSectionsPageProps = {
   searchParams?: Promise<{
@@ -31,7 +32,7 @@ function getSearchValue(value: string | string[] | undefined) {
 
 function formatPerson(user: { name: string | null; email: string } | null) {
   if (!user) {
-    return "Öğretmen henüz atanmadı";
+    return "Sorumlu kişi henüz atanmadı";
   }
 
   return user.name ? `${user.name} · ${user.email}` : user.email;
@@ -41,37 +42,38 @@ function formatSectionName(section: { name: string; code: string | null }) {
   return section.code ? `${section.code} · ${section.name}` : section.name;
 }
 
-function AssignInstructorForm({
+function AssignResponsibleForm({
   sectionId,
-  instructors,
+  responsibleCandidates,
 }: {
   sectionId: string;
-  instructors: Array<{
+  responsibleCandidates: Array<{
     id: string;
+    role: string;
     user: {
       name: string | null;
       email: string;
     };
   }>;
 }) {
-  if (instructors.length === 0) {
-    return <span>Öğretmen henüz atanmadı</span>;
+  if (responsibleCandidates.length === 0) {
+    return <span>Sorumlu kişi henüz atanmadı</span>;
   }
 
   return (
     <form action={assignAdminSectionInstructorAction} className="grid gap-2">
       <input type="hidden" name="sectionId" value={sectionId} />
       <label>
-        <span className="sr-only">Öğretmen Ata</span>
+        <span className="sr-only">Sorumlu Kişi Ata</span>
         <select
           name="instructorMembershipId"
           required
           className="h-9 w-full rounded-md border border-neutral-300 bg-white px-2 text-sm text-neutral-700 outline-none transition focus:border-neutral-500"
         >
-          <option value="">Öğretmen Ata</option>
-          {instructors.map((membership) => (
+          <option value="">Sorumlu Kişi Ata</option>
+          {responsibleCandidates.map((membership) => (
             <option key={membership.id} value={membership.id}>
-              {formatPerson(membership.user)}
+              {formatPerson(membership.user)} · {getRoleLabel(membership.role)}
             </option>
           ))}
         </select>
@@ -80,7 +82,7 @@ function AssignInstructorForm({
         type="submit"
         className="inline-flex h-8 items-center justify-center rounded-md bg-neutral-950 px-3 text-xs font-medium text-white transition hover:bg-neutral-800"
       >
-        Öğretmen Ata
+        Sorumlu Ata
       </button>
     </form>
   );
@@ -105,7 +107,7 @@ export default async function AdminSectionsPage({
       <PageHeader
         eyebrow={authContext.activeOrganization.name}
         title="Ders Grupları"
-        description="Ders, öğretmen ve öğrenci kayıtlarını aynı kurum kapsamında yönetin."
+        description="Ders, sorumlu kişi ve öğrenci kayıtlarını aynı kurum kapsamında yönetin."
       >
         <ButtonLink
           href={routes.admin.sectionCreate}
@@ -123,7 +125,7 @@ export default async function AdminSectionsPage({
       ) : null}
       {assigned ? (
         <div className="rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-700">
-          Ders grubu güncellendi. Öğretmen başarıyla atandı.
+          Ders grubu güncellendi. Sorumlu kişi başarıyla atandı.
         </div>
       ) : null}
       {errorMessage ? (
@@ -134,7 +136,7 @@ export default async function AdminSectionsPage({
 
       <SectionCard
         title="Ders Grubu Listesi"
-        description="Oturumlar, atanmış öğretmen üzerinden öğretmen panelinde görünür."
+        description="Oturumlar, atanmış sorumlu kişi üzerinden doğrulanır."
       >
         <form
           action={routes.admin.sections}
@@ -146,7 +148,7 @@ export default async function AdminSectionsPage({
             <input
               name="q"
               defaultValue={query}
-              placeholder="Ders, öğretmen veya grup ara"
+              placeholder="Ders, sorumlu kişi veya grup ara"
               className="w-full bg-transparent outline-none placeholder:text-neutral-400"
             />
           </label>
@@ -167,7 +169,7 @@ export default async function AdminSectionsPage({
                   <tr>
                     <th className="px-4 py-3">Ders Grubu</th>
                     <th className="px-4 py-3">Ders / Kurs</th>
-                    <th className="px-4 py-3">Atanmış Öğretmen</th>
+                    <th className="px-4 py-3">Atanmış Sorumlu</th>
                     <th className="px-4 py-3">Kayıtlı Öğrenciler</th>
                     <th className="px-4 py-3">Yoklama Oturumları</th>
                     <th className="px-4 py-3">Durum</th>
@@ -186,9 +188,9 @@ export default async function AdminSectionsPage({
                         {section.instructorMembership ? (
                           formatPerson(section.instructorMembership.user)
                         ) : (
-                          <AssignInstructorForm
+                          <AssignResponsibleForm
                             sectionId={section.id}
-                            instructors={options.instructors}
+                            responsibleCandidates={options.responsibleCandidates}
                           />
                         )}
                       </td>
@@ -232,14 +234,16 @@ export default async function AdminSectionsPage({
                   </div>
                   <dl className="mt-4 grid gap-3 text-sm">
                     <div>
-                      <dt className="text-neutral-500">Atanmış Öğretmen</dt>
+                      <dt className="text-neutral-500">Atanmış Sorumlu</dt>
                       <dd className="mt-1 font-medium text-neutral-900">
                         {formatPerson(section.instructorMembership?.user ?? null)}
                         {!section.instructorMembership ? (
                           <div className="mt-3">
-                            <AssignInstructorForm
+                            <AssignResponsibleForm
                               sectionId={section.id}
-                              instructors={options.instructors}
+                              responsibleCandidates={
+                                options.responsibleCandidates
+                              }
                             />
                           </div>
                         ) : null}
@@ -278,7 +282,7 @@ export default async function AdminSectionsPage({
             description={
               query
                 ? "Farklı bir arama terimi deneyin veya aramayı temizleyin."
-                : "Yoklama oturumu oluşturmadan önce ders grubunu ve atanmış öğretmeni tanımlayın."
+                : "Yoklama oturumu oluşturmadan önce ders grubunu ve atanmış sorumlu kişiyi tanımlayın."
             }
             icon={<BookOpen className="h-5 w-5" aria-hidden="true" />}
             actionHref={routes.admin.sectionCreate}
@@ -289,16 +293,16 @@ export default async function AdminSectionsPage({
 
       <SectionCard
         title="İlişki Modeli"
-        description="Öğrenciler öğretmene doğrudan değil, ders grubu kayıtları üzerinden bağlanır."
+        description="Öğrenciler sorumlu kişiye doğrudan değil, ders grubu kayıtları üzerinden bağlanır."
       >
         <div className="grid gap-4 md:grid-cols-3">
           <div className="rounded-lg border border-neutral-200 bg-neutral-50 p-4">
             <BookOpen className="h-5 w-5 text-neutral-500" aria-hidden="true" />
             <p className="mt-3 text-sm font-medium text-neutral-950">
-              Öğretmen Ata
+              Sorumlu Ata
             </p>
             <p className="mt-1 text-sm leading-6 text-neutral-600">
-              Her ders grubunun bir atanmış öğretmeni vardır.
+              Her ders grubunun bir atanmış sorumlu kişisi vardır.
             </p>
           </div>
           <div className="rounded-lg border border-neutral-200 bg-neutral-50 p-4">
@@ -319,7 +323,7 @@ export default async function AdminSectionsPage({
               Oturum Görünürlüğü
             </p>
             <p className="mt-1 text-sm leading-6 text-neutral-600">
-              Yoklama oturumu atanmış öğretmenin panelinde görünecek.
+              Öğretmen sorumluluğundaki oturumlar öğretmen panelinde görünür.
             </p>
           </div>
         </div>

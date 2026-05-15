@@ -16,6 +16,7 @@ import {
   type AdminSectionCreateFormField,
   type AdminSectionCreateOptionsData,
 } from "@/lib/admin/section-create";
+import { getRoleLabel } from "@/lib/localization";
 
 const inputClassName =
   "mt-2 w-full rounded-md border border-neutral-300 bg-white px-3 py-2 text-sm text-neutral-900 outline-none transition placeholder:text-neutral-400 focus:border-neutral-500 disabled:cursor-not-allowed disabled:bg-neutral-50 disabled:text-neutral-500";
@@ -89,8 +90,8 @@ export function AdminCreateSectionForm({
   );
   const { values, errors } = state;
   const hasCourses = options.courses.length > 0;
-  const hasInstructors = options.instructors.length > 0;
-  const hasRequiredData = hasCourses && hasInstructors;
+  const hasResponsibleCandidates = options.responsibleCandidates.length > 0;
+  const hasRequiredData = hasCourses && hasResponsibleCandidates;
 
   return (
     <section className="grid gap-6 xl:grid-cols-[1fr_360px]">
@@ -107,21 +108,23 @@ export function AdminCreateSectionForm({
         {!hasRequiredData ? (
           <SectionCard
             title="Ön koşullar eksik"
-            description="Ders grubu oluşturmak için aktif ders / kurs ve aktif öğretmen gerekir."
+            description="Ders grubu oluşturmak için aktif ders / kurs ve aktif sorumlu kişi gerekir."
           >
             <div className="grid gap-4 md:grid-cols-2">
               {!hasCourses ? (
                 <EmptyState
-                  title="Aktif ders yok"
-                  description="Önce bu kurum için aktif bir ders veya kurs kaydı gerekir."
+                  title="Aktif ders / kurs yok"
+                  description="Önce bir ders / kurs oluşturun."
                   icon={<BookOpen className="h-5 w-5" aria-hidden="true" />}
+                  actionHref={routes.admin.courseCreate}
+                  actionLabel="Önce bir ders / kurs oluşturun"
                   className="min-h-40"
                 />
               ) : null}
-              {!hasInstructors ? (
+              {!hasResponsibleCandidates ? (
                 <EmptyState
-                  title="Aktif öğretmen yok"
-                  description="Önce kurum kullanıcılarından bir öğretmen oluşturun."
+                  title="Aktif öğretmen veya yönetici yok"
+                  description="Ders grubu için aktif bir öğretmen veya kurum yöneticisi gerekir."
                   icon={<UserRound className="h-5 w-5" aria-hidden="true" />}
                   className="min-h-40"
                 />
@@ -132,7 +135,7 @@ export function AdminCreateSectionForm({
 
         <SectionCard
           title="Ders Grubu"
-          description="Ders grubu, bir ders / kurs ve bir atanmış öğretmen ile oluşturulur."
+          description="Ders grubu, bir ders / kurs ve bir sorumlu kişi ile oluşturulur."
           actions={
             <div className="flex h-9 w-9 items-center justify-center rounded-md bg-neutral-100 text-neutral-600">
               <BookOpen className="h-4 w-4" aria-hidden="true" />
@@ -172,15 +175,15 @@ export function AdminCreateSectionForm({
 
             <Field
               id="instructor-membership-id"
-              label="Öğretmen"
-              description="Oturumlar bu öğretmenin panelinde görünür."
+              label="Sorumlu Kişi"
+              description="Öğretmen veya kurum yöneticisi seçin."
               error={getFieldError(errors, "instructorMembershipId")}
             >
               <select
                 id="instructor-membership-id"
                 name="instructorMembershipId"
                 required
-                disabled={!hasInstructors}
+                disabled={!hasResponsibleCandidates}
                 defaultValue={values.instructorMembershipId}
                 aria-invalid={Boolean(
                   getFieldError(errors, "instructorMembershipId"),
@@ -193,11 +196,12 @@ export function AdminCreateSectionForm({
                 className={selectClassName}
               >
                 <option value="" disabled>
-                  Öğretmen seçin
+                  Öğretmen veya Yönetici seçin
                 </option>
-                {options.instructors.map((membership) => (
+                {options.responsibleCandidates.map((membership) => (
                   <option key={membership.id} value={membership.id}>
-                    {formatPerson(membership.user)}
+                    {formatPerson(membership.user)} ·{" "}
+                    {getRoleLabel(membership.role)}
                   </option>
                 ))}
               </select>
@@ -294,7 +298,7 @@ export function AdminCreateSectionForm({
       <aside className="grid gap-6 self-start">
         <SectionCard
           title="Atama Kuralı"
-          description="MVP modelinde her ders grubunun bir atanmış öğretmeni vardır."
+          description="MVP modelinde her ders grubunun bir atanmış sorumlusu vardır."
           actions={
             <div className="flex h-9 w-9 items-center justify-center rounded-md bg-neutral-100 text-neutral-600">
               <Info className="h-4 w-4" aria-hidden="true" />
@@ -313,17 +317,17 @@ export function AdminCreateSectionForm({
             </div>
             <div className="flex items-center justify-between gap-3">
               <span className="text-sm font-medium text-neutral-700">
-                Öğretmen
+                Sorumlu Kişi
               </span>
               <StatusBadge
-                label={String(options.instructors.length)}
-                tone={hasInstructors ? "success" : "warning"}
+                label={String(options.responsibleCandidates.length)}
+                tone={hasResponsibleCandidates ? "success" : "warning"}
               />
             </div>
           </div>
           <p className="mt-5 text-sm leading-6 text-neutral-600">
             Bir öğrenci birden fazla ders grubuna kayıt edilerek birden fazla
-            öğretmenin derslerine bağlanabilir.
+            sorumlu kişinin derslerine bağlanabilir.
           </p>
         </SectionCard>
       </aside>

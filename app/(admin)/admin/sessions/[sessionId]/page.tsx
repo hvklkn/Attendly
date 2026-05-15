@@ -180,7 +180,9 @@ export default async function AdminSessionDetailPage({
 
   const { session } = data;
   const latestQrToken = data.latestQrToken;
-  const instructor = formatPerson(session.section.instructorMembership?.user);
+  const responsiblePerson = formatPerson(
+    session.section.instructorMembership?.user,
+  );
   const creator = formatPerson(session.createdByMembership?.user);
   const created =
     (Array.isArray(resolvedSearchParams?.created)
@@ -221,7 +223,7 @@ export default async function AdminSessionDetailPage({
         ? `${session.section.code} · ${session.section.name}`
         : session.section.name,
     },
-    { label: "Öğretmen", value: instructor },
+    { label: "Sorumlu Kişi", value: responsiblePerson },
     {
       label: "Kayıtlı Öğrenci",
       value: String(session.section._count.enrollments),

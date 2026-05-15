@@ -19,6 +19,7 @@ import type { NavigationIcon, NavigationItem } from "@/types/navigation";
 
 const navIcons: Record<NavigationIcon, typeof LayoutDashboard> = {
   dashboard: LayoutDashboard,
+  courses: BookOpen,
   sessions: CalendarDays,
   sections: BookOpen,
   users: Users,

@@ -50,7 +50,7 @@ function getSessionTone(status: string) {
 
 function formatPerson(user: { name: string | null; email: string } | null) {
   if (!user) {
-    return "Öğretmen henüz atanmadı";
+    return "Sorumlu kişi henüz atanmadı";
   }
 
   return user.name ? user.name : user.email;
@@ -138,7 +138,7 @@ export default async function AdminSessionsPage({
                 <thead className="bg-neutral-50 text-xs font-medium uppercase tracking-normal text-neutral-500">
                   <tr>
                     <th className="px-4 py-3">Oturum</th>
-                    <th className="px-4 py-3">Atanmış Öğretmen</th>
+                    <th className="px-4 py-3">Atanmış Sorumlu</th>
                     <th className="px-4 py-3">Oluşturan</th>
                     <th className="px-4 py-3">Oda</th>
                     <th className="px-4 py-3">Başlangıç</th>
@@ -250,7 +250,7 @@ export default async function AdminSessionsPage({
                         </dd>
                       </div>
                       <div className="col-span-2">
-                        <dt className="text-neutral-500">Atanmış Öğretmen</dt>
+                        <dt className="text-neutral-500">Atanmış Sorumlu</dt>
                         <dd className="mt-1 font-medium text-neutral-900">
                           {instructor}
                         </dd>

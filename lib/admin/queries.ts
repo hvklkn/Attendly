@@ -8,6 +8,7 @@ import {
   UserStatus,
 } from "@/lib/generated/prisma/enums";
 import { getAdminOrganizationId, type AdminAuthContext } from "@/lib/admin/auth";
+import { SECTION_RESPONSIBLE_ROLES } from "@/lib/admin/section-responsible";
 import { db } from "@/lib/db";
 
 const ACTIVE_SESSION_STATUSES = [
@@ -21,6 +22,7 @@ export async function getAdminDashboardData(authContext: AdminAuthContext) {
   const now = new Date();
 
   const [
+    totalCourses,
     totalSessions,
     totalSections,
     totalInstructors,
@@ -33,6 +35,11 @@ export async function getAdminDashboardData(authContext: AdminAuthContext) {
     recentSessions,
     recentAuditLogs,
   ] = await Promise.all([
+    db.course.count({
+      where: {
+        organizationId,
+      },
+    }),
     db.attendanceSession.count({
       where: {
         organizationId,
@@ -144,6 +151,7 @@ export async function getAdminDashboardData(authContext: AdminAuthContext) {
       : null;
 
   return {
+    totalCourses,
     totalSessions,
     totalSections,
     totalInstructors,
@@ -157,6 +165,66 @@ export async function getAdminDashboardData(authContext: AdminAuthContext) {
     recentSessions,
     recentAuditLogs,
   };
+}
+
+export async function getAdminCoursesData(
+  authContext: AdminAuthContext,
+  input?: {
+    query?: string;
+  },
+) {
+  const organizationId = getAdminOrganizationId(authContext);
+  const query = input?.query?.trim();
+
+  return db.course.findMany({
+    where: {
+      organizationId,
+      ...(query
+        ? {
+            OR: [
+              {
+                code: {
+                  contains: query,
+                },
+              },
+              {
+                title: {
+                  contains: query,
+                },
+              },
+              {
+                description: {
+                  contains: query,
+                },
+              },
+            ],
+          }
+        : {}),
+    },
+    orderBy: [
+      {
+        code: "asc",
+      },
+      {
+        title: "asc",
+      },
+    ],
+    take: 100,
+    select: {
+      id: true,
+      code: true,
+      title: true,
+      description: true,
+      isActive: true,
+      createdAt: true,
+      updatedAt: true,
+      _count: {
+        select: {
+          sections: true,
+        },
+      },
+    },
+  });
 }
 
 export async function getAdminSessionsData(
@@ -382,7 +450,7 @@ export async function getAdminSessionCreateOptionsData(
 ) {
   const organizationId = getAdminOrganizationId(authContext);
 
-  const [courses, sections, rooms, instructors] = await Promise.all([
+  const [courses, sections, rooms, responsibleCandidates] = await Promise.all([
     db.course.findMany({
       where: {
         organizationId,
@@ -434,6 +502,7 @@ export async function getAdminSessionCreateOptionsData(
         instructorMembership: {
           select: {
             id: true,
+            role: true,
             user: {
               select: {
                 name: true,
@@ -468,7 +537,9 @@ export async function getAdminSessionCreateOptionsData(
     db.membership.findMany({
       where: {
         organizationId,
-        role: MembershipRole.INSTRUCTOR,
+        role: {
+          in: [...SECTION_RESPONSIBLE_ROLES],
+        },
         user: {
           is: {
             status: UserStatus.ACTIVE,
@@ -495,7 +566,7 @@ export async function getAdminSessionCreateOptionsData(
     courses,
     sections,
     rooms,
-    instructors,
+    responsibleCandidates,
   };
 }
 
@@ -617,7 +688,7 @@ export async function getAdminSectionCreateOptionsData(
 ) {
   const organizationId = getAdminOrganizationId(authContext);
 
-  const [courses, instructors] = await Promise.all([
+  const [courses, responsibleCandidates] = await Promise.all([
     db.course.findMany({
       where: {
         organizationId,
@@ -640,7 +711,9 @@ export async function getAdminSectionCreateOptionsData(
     db.membership.findMany({
       where: {
         organizationId,
-        role: MembershipRole.INSTRUCTOR,
+        role: {
+          in: [...SECTION_RESPONSIBLE_ROLES],
+        },
         user: {
           is: {
             status: UserStatus.ACTIVE,
@@ -672,7 +745,7 @@ export async function getAdminSectionCreateOptionsData(
 
   return {
     courses,
-    instructors,
+    responsibleCandidates,
   };
 }
 

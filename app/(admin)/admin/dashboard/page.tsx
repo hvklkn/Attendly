@@ -28,6 +28,12 @@ import {
 
 const quickActions = [
   {
+    title: "Ders / kurs oluştur",
+    description: "Kurum kataloğuna yeni ders veya kurs ekleyin.",
+    href: routes.admin.courseCreate,
+    icon: <BookOpen className="h-4 w-4" aria-hidden="true" />,
+  },
+  {
     title: "Yoklama oturumu oluştur",
     description: "Bir şube için yoklama zaman aralığı hazırlayın.",
     href: routes.admin.sessionCreate,
@@ -35,7 +41,7 @@ const quickActions = [
   },
   {
     title: "Ders grubu oluştur",
-    description: "Bir öğretmene bağlı ders grubu hazırlayın.",
+    description: "Bir sorumlu kişiye bağlı ders grubu hazırlayın.",
     href: routes.admin.sectionCreate,
     icon: <UserPlus className="h-4 w-4" aria-hidden="true" />,
   },
@@ -80,6 +86,14 @@ export default async function AdminDashboardPage() {
   const data = await getAdminDashboardData(authContext);
 
   const overviewStats = [
+    {
+      label: "Dersler / Kurslar",
+      value: String(data.totalCourses),
+      trend: "Kurum kataloğu",
+      description: "Ders grubu oluşturmak için kullanılan kayıtlar.",
+      icon: <BookOpen className="h-4 w-4" aria-hidden="true" />,
+      tone: "neutral" as const,
+    },
     {
       label: "Toplam Oturum",
       value: String(data.totalSessions),
@@ -130,7 +144,7 @@ export default async function AdminDashboardPage() {
         </ButtonLink>
       </PageHeader>
 
-      <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
         {overviewStats.map((stat) => (
           <StatCard key={stat.label} {...stat} />
         ))}

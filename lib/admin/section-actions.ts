@@ -43,6 +43,7 @@ export async function createAdminSectionAction(
   }
 
   revalidatePath(routes.admin.sections);
+  revalidatePath(routes.admin.courses);
   revalidatePath(routes.admin.sessionCreate);
   revalidatePath(routes.admin.dashboard);
   revalidatePath(routes.instructor.dashboard);
@@ -63,6 +64,7 @@ export async function assignAdminSectionInstructorAction(formData: FormData) {
   });
 
   revalidatePath(routes.admin.sections);
+  revalidatePath(routes.admin.courses);
   revalidatePath(routes.admin.sessionCreate);
   revalidatePath(routes.admin.sessions);
   revalidatePath(routes.admin.dashboard);

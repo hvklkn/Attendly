@@ -16,6 +16,7 @@ export type RoleNavigation = {
 
 export type NavigationIcon =
   | "dashboard"
+  | "courses"
   | "sessions"
   | "sections"
   | "users"
