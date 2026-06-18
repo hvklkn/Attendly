@@ -96,9 +96,9 @@ function formatRoomLabel(
 function formatSectionLabel(
   section: InstructorSessionCreateOptionsData["sections"][number],
 ) {
-  const code = section.code ? `${section.course.code} - ${section.code}` : section.course.code;
+  const sectionCode = section.code ?? `${section.course.code}-${section.name}`;
 
-  return `${code} - ${section.name} - ${section._count.enrollments} kayıtlı`;
+  return `${sectionCode} (${section._count.enrollments} öğrenci)`;
 }
 
 export function InstructorCreateSessionForm({
@@ -120,6 +120,7 @@ export function InstructorCreateSessionForm({
     initialState,
   );
   const { values, errors } = state;
+  const [selectedSectionId, setSelectedSectionId] = useState(values.sectionId);
   const [selectedRoomId, setSelectedRoomId] = useState(values.roomId);
   const [geofenceLocation, setGeofenceLocation] = useState({
     latitude: values.geofenceLatitude,
@@ -134,11 +135,11 @@ export function InstructorCreateSessionForm({
   const [locationError, setLocationError] = useState<string | null>(null);
   const [isCapturingLocation, setIsCapturingLocation] = useState(false);
   const hasSections = options.sections.length > 0;
+  const selectedSection =
+    options.sections.find((section) => section.id === selectedSectionId) ??
+    null;
   const selectedRoom =
     options.rooms.find((room) => room.id === selectedRoomId) ?? null;
-  const hasCapturedLocation = Boolean(
-    geofenceLocation.latitude && geofenceLocation.longitude,
-  );
   const geofenceError =
     getFieldError(errors, "geofenceLatitude") ??
     getFieldError(errors, "geofenceLongitude") ??
@@ -281,7 +282,8 @@ export function InstructorCreateSessionForm({
                 id="section-id"
                 name="sectionId"
                 required
-                defaultValue={values.sectionId}
+                value={selectedSectionId}
+                onChange={(event) => setSelectedSectionId(event.target.value)}
                 aria-invalid={Boolean(getFieldError(errors, "sectionId"))}
                 aria-describedby={
                   getFieldError(errors, "sectionId")
@@ -300,6 +302,12 @@ export function InstructorCreateSessionForm({
                 ))}
               </select>
             </Field>
+
+            {selectedSection?._count.enrollments === 0 ? (
+              <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+                Bu şubede aktif öğrenci bulunmuyor.
+              </p>
+            ) : null}
 
             <div className="grid gap-5 md:grid-cols-2">
               <Field

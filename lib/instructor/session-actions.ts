@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { routes } from "@/constants/routes";
 import { requireInstructorAuthContext } from "@/lib/instructor/auth";
 import {
+  closeInstructorAttendanceSession,
   createInstructorAttendanceSession,
   issueInstructorSessionQrToken,
   startInstructorAttendanceSession,
@@ -123,4 +124,31 @@ export async function startInstructorSessionAction(formData: FormData) {
   revalidatePath(routes.admin.sessions);
   revalidatePath(routes.admin.dashboard);
   redirect(`/instructor/sessions/${result.sessionId}?started=1`);
+}
+
+export async function closeInstructorSessionAction(formData: FormData) {
+  const sessionIdValue = formData.get("sessionId");
+  const sessionId = typeof sessionIdValue === "string" ? sessionIdValue : "";
+  const targetPath = sessionId.trim()
+    ? `/instructor/sessions/${sessionId.trim()}`
+    : routes.instructor.sessions;
+
+  if (!sessionId.trim()) {
+    redirect(`${targetPath}?closeError=1`);
+  }
+
+  const authContext = await requireInstructorAuthContext();
+  const result = await closeInstructorAttendanceSession(authContext, sessionId);
+
+  if (!result.ok) {
+    redirect(`${targetPath}?closeError=1`);
+  }
+
+  revalidatePath(`/instructor/sessions/${result.sessionId}`);
+  revalidatePath(routes.instructor.sessions);
+  revalidatePath(routes.instructor.dashboard);
+  revalidatePath(`/admin/sessions/${result.sessionId}`);
+  revalidatePath(routes.admin.sessions);
+  revalidatePath(routes.admin.dashboard);
+  redirect(`/instructor/sessions/${result.sessionId}?closed=1`);
 }

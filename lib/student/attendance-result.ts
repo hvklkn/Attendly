@@ -9,6 +9,7 @@ export type StudentScanResultCode =
   | "expired_token"
   | "revoked_token"
   | "invalid_token"
+  | "session_closed"
   | "session_unavailable"
   | "location_unavailable"
   | "error";

@@ -574,6 +574,68 @@ export async function getAdminSessionCreateOptionsData(
   };
 }
 
+export async function getAdminRoomsData(
+  authContext: AdminAuthContext,
+  input?: {
+    query?: string;
+  },
+) {
+  const organizationId = getAdminOrganizationId(authContext);
+  const query = input?.query?.trim();
+
+  return db.room.findMany({
+    where: {
+      organizationId,
+      ...(query
+        ? {
+            OR: [
+              {
+                name: {
+                  contains: query,
+                },
+              },
+              {
+                code: {
+                  contains: query,
+                },
+              },
+              {
+                address: {
+                  contains: query,
+                },
+              },
+            ],
+          }
+        : {}),
+    },
+    orderBy: [
+      {
+        name: "asc",
+      },
+      {
+        createdAt: "asc",
+      },
+    ],
+    take: 100,
+    select: {
+      id: true,
+      name: true,
+      code: true,
+      description: true,
+      address: true,
+      latitude: true,
+      longitude: true,
+      allowedRadiusMeters: true,
+      isActive: true,
+      _count: {
+        select: {
+          attendanceSessions: true,
+        },
+      },
+    },
+  });
+}
+
 export async function getAdminSectionsData(
   authContext: AdminAuthContext,
   input?: {
@@ -692,7 +754,7 @@ export async function getAdminSectionCreateOptionsData(
 ) {
   const organizationId = getAdminOrganizationId(authContext);
 
-  const [courses, responsibleCandidates] = await Promise.all([
+  const [courses, responsibleCandidates, studentCandidates] = await Promise.all([
     db.course.findMany({
       where: {
         organizationId,
@@ -745,11 +807,42 @@ export async function getAdminSectionCreateOptionsData(
         },
       },
     }),
+    db.membership.findMany({
+      where: {
+        organizationId,
+        role: MembershipRole.STUDENT,
+        user: {
+          is: {
+            status: UserStatus.ACTIVE,
+          },
+        },
+      },
+      orderBy: [
+        {
+          user: {
+            name: "asc",
+          },
+        },
+        {
+          createdAt: "asc",
+        },
+      ],
+      select: {
+        id: true,
+        user: {
+          select: {
+            name: true,
+            email: true,
+          },
+        },
+      },
+    }),
   ]);
 
   return {
     courses,
     responsibleCandidates,
+    studentCandidates,
   };
 }
 

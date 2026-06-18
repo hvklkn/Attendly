@@ -1,9 +1,9 @@
 import "server-only";
 
 import {
-  AttendanceRecordStatus,
   AttendanceSessionStatus,
   EnrollmentStatus,
+  MembershipRole,
   PresenceCheckType,
 } from "@/lib/generated/prisma/enums";
 import {
@@ -298,6 +298,62 @@ export async function getInstructorSessionDetailData(
                 enrollments: true,
               },
             },
+            enrollments: {
+              where: {
+                status: EnrollmentStatus.ACTIVE,
+              },
+              select: {
+                id: true,
+                studentMembershipId: true,
+                studentMembership: {
+                  select: {
+                    user: {
+                      select: {
+                        name: true,
+                        email: true,
+                      },
+                    },
+                  },
+                },
+                attendanceRecords: {
+                  where: {
+                    attendanceSessionId: sessionId,
+                    organizationId,
+                  },
+                  orderBy: [
+                    {
+                      checkedInAt: "desc",
+                    },
+                    {
+                      createdAt: "desc",
+                    },
+                  ],
+                  take: 1,
+                  select: {
+                    id: true,
+                    status: true,
+                    checkedInAt: true,
+                    createdAt: true,
+                    locationAccuracyMeters: true,
+                    distanceMeters: true,
+                    presenceChecks: {
+                      where: {
+                        checkType: PresenceCheckType.INITIAL_CHECK_IN,
+                      },
+                      orderBy: {
+                        checkedAt: "desc",
+                      },
+                      take: 1,
+                      select: {
+                        status: true,
+                        distanceToGeofenceMeters: true,
+                        checkedAt: true,
+                      },
+                    },
+                  },
+                },
+              },
+            },
           },
         },
         room: {
@@ -404,15 +460,9 @@ export async function getInstructorSessionDetailData(
     return accumulator;
   }, {});
 
-  const attendedRecords =
-    (attendanceCountsByStatus[AttendanceRecordStatus.PRESENT] ?? 0) +
-    (attendanceCountsByStatus[AttendanceRecordStatus.LATE] ?? 0) +
-    (attendanceCountsByStatus[AttendanceRecordStatus.MANUAL] ?? 0);
-
   return {
     session,
     attendanceStatusCounts,
-    attendedRecords,
     latestQrToken: session.qrTokens[0] ?? null,
   };
 }
@@ -426,111 +476,169 @@ export async function getInstructorStudentsData(
   const organizationId = getInstructorOrganizationId(authContext);
   const query = input?.query?.trim();
 
-  return db.enrollment.findMany({
-    where: {
-      organizationId,
-      section: {
-        is: {
-          instructorMembershipId: authContext.membership.id,
+  const [students, sections] = await Promise.all([
+    db.membership.findMany({
+      where: {
+        organizationId,
+        role: MembershipRole.STUDENT,
+        ...(query
+          ? {
+              OR: [
+                {
+                  user: {
+                    is: {
+                      name: {
+                        contains: query,
+                      },
+                    },
+                  },
+                },
+                {
+                  user: {
+                    is: {
+                      email: {
+                        contains: query,
+                      },
+                    },
+                  },
+                },
+                {
+                  enrollments: {
+                    some: {
+                      section: {
+                        is: {
+                          name: {
+                            contains: query,
+                          },
+                        },
+                      },
+                    },
+                  },
+                },
+                {
+                  enrollments: {
+                    some: {
+                      section: {
+                        is: {
+                          code: {
+                            contains: query,
+                          },
+                        },
+                      },
+                    },
+                  },
+                },
+                {
+                  enrollments: {
+                    some: {
+                      section: {
+                        is: {
+                          course: {
+                            is: {
+                              code: {
+                                contains: query,
+                              },
+                            },
+                          },
+                        },
+                      },
+                    },
+                  },
+                },
+              ],
+            }
+          : {}),
+      },
+      orderBy: [
+        {
+          createdAt: "desc",
         },
-      },
-      ...(query
-        ? {
-            OR: [
-              {
-                studentMembership: {
-                  is: {
-                    user: {
-                      is: {
-                        name: {
-                          contains: query,
-                        },
-                      },
-                    },
+      ],
+      take: 100,
+      select: {
+        id: true,
+        user: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            status: true,
+          },
+        },
+        enrollments: {
+          where: {
+            organizationId,
+          },
+          orderBy: [
+            {
+              status: "asc",
+            },
+            {
+              enrolledAt: "desc",
+            },
+          ],
+          select: {
+            id: true,
+            status: true,
+            enrolledAt: true,
+            endedAt: true,
+            section: {
+              select: {
+                id: true,
+                name: true,
+                code: true,
+                course: {
+                  select: {
+                    code: true,
+                    title: true,
                   },
                 },
               },
-              {
-                studentMembership: {
-                  is: {
-                    user: {
-                      is: {
-                        email: {
-                          contains: query,
-                        },
-                      },
-                    },
-                  },
-                },
-              },
-              {
-                section: {
-                  is: {
-                    name: {
-                      contains: query,
-                    },
-                  },
-                },
-              },
-              {
-                section: {
-                  is: {
-                    course: {
-                      is: {
-                        code: {
-                          contains: query,
-                        },
-                      },
-                    },
-                  },
-                },
-              },
-            ],
-          }
-        : {}),
-    },
-    orderBy: [
-      {
-        enrolledAt: "desc",
-      },
-      {
-        createdAt: "desc",
-      },
-    ],
-    take: 100,
-    select: {
-      id: true,
-      status: true,
-      enrolledAt: true,
-      studentMembership: {
-        select: {
-          id: true,
-          role: true,
-          user: {
-            select: {
-              id: true,
-              name: true,
-              email: true,
-              status: true,
             },
           },
         },
       },
-      section: {
-        select: {
-          id: true,
-          name: true,
-          code: true,
-          course: {
-            select: {
-              code: true,
-              title: true,
+    }),
+    db.section.findMany({
+      where: {
+        organizationId,
+        isActive: true,
+      },
+      orderBy: [
+        {
+          courseId: "asc",
+        },
+        {
+          name: "asc",
+        },
+      ],
+      select: {
+        id: true,
+        name: true,
+        code: true,
+        course: {
+          select: {
+            code: true,
+            title: true,
+          },
+        },
+        _count: {
+          select: {
+            enrollments: {
+              where: {
+                status: EnrollmentStatus.ACTIVE,
+              },
             },
           },
         },
       },
-    },
-  });
+    }),
+  ]);
+
+  return {
+    students,
+    sections,
+  };
 }
 
 export async function getInstructorStudentCreateOptionsData(

@@ -8,6 +8,7 @@ import {
   CalendarDays,
   History,
   LayoutDashboard,
+  MapPin,
   QrCode,
   Settings,
   UserRound,
@@ -20,6 +21,7 @@ import type { NavigationIcon, NavigationItem } from "@/types/navigation";
 const navIcons: Record<NavigationIcon, typeof LayoutDashboard> = {
   dashboard: LayoutDashboard,
   courses: BookOpen,
+  rooms: MapPin,
   sessions: CalendarDays,
   sections: BookOpen,
   users: Users,

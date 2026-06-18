@@ -356,6 +356,7 @@ export function InstructorSessionQrTokenPanel({
   const refreshInFlightRef = useRef(false);
   const issuedTokenRef = useRef<IssuedQrToken | null>(null);
   const canIssueToken = canIssueQrTokenForSessionStatus(sessionStatus);
+  const isClosedSession = sessionStatus === "CLOSED";
   const displayedToken = state.issuedToken ?? latestToken;
   const displayedTokenStatus = displayedToken
     ? getQrTokenStatus(displayedToken)
@@ -543,7 +544,11 @@ export function InstructorSessionQrTokenPanel({
   return (
     <SectionCard
       title="Canlı QR Kodu"
-      description="Öğrenciler bu bağlantıyı okutarak yoklama adımına geçer. QR kodu 60 saniyede bir otomatik yenilenir."
+      description={
+        isClosedSession
+          ? "Bu yoklama oturumu kapatıldığı için yeni QR kodu oluşturulamaz."
+          : "Öğrenciler bu bağlantıyı okutarak yoklama adımına geçer. QR kodu 60 saniyede bir otomatik yenilenir."
+      }
       actions={
         <div className="flex h-9 w-9 items-center justify-center rounded-md bg-neutral-100 text-neutral-600">
           <KeyRound className="h-4 w-4" aria-hidden="true" />
@@ -580,7 +585,9 @@ export function InstructorSessionQrTokenPanel({
 
         {!canIssueToken ? (
           <p className="text-sm leading-6 text-neutral-500">
-            QR yalnızca taslak, planlı veya aktif oturumlar için oluşturulabilir.
+            {isClosedSession
+              ? "Yoklama kapatıldı. Öğrenciler bu oturum için yeni kayıt oluşturamaz."
+              : "QR yalnızca taslak, planlı veya aktif oturumlar için oluşturulabilir."}
           </p>
         ) : null}
 

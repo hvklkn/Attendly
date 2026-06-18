@@ -29,6 +29,7 @@ function getSearchValue(value: string | string[] | undefined) {
 function getSessionTone(status: string) {
   if (status === "ACTIVE") return "success" as const;
   if (status === "DRAFT") return "warning" as const;
+  if (status === "CLOSED") return "neutral" as const;
   if (status === "CANCELLED") return "danger" as const;
   return "info" as const;
 }

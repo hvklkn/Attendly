@@ -12,6 +12,8 @@ export const routes = {
     dashboard: "/admin/dashboard",
     courses: "/admin/courses",
     courseCreate: "/admin/courses/new",
+    rooms: "/admin/rooms",
+    roomCreate: "/admin/rooms/new",
     sessions: "/admin/sessions",
     sessionCreate: "/admin/sessions/new",
     sessionDetail: "/admin/sessions/session-id",

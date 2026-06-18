@@ -31,6 +31,16 @@ export type StartInstructorAttendanceSessionResult =
       message: string;
     };
 
+export type CloseInstructorAttendanceSessionResult =
+  | {
+      ok: true;
+      sessionId: string;
+    }
+  | {
+      ok: false;
+      message: string;
+    };
+
 export type CreateInstructorSessionResult =
   | {
       ok: true;
@@ -307,6 +317,93 @@ export async function startInstructorAttendanceSession(
     return {
       ok: false,
       message: "Oturum şu anda başlatılamadı. Lütfen tekrar deneyin.",
+    };
+  }
+}
+
+export async function closeInstructorAttendanceSession(
+  authContext: InstructorAuthContext,
+  sessionId: string,
+): Promise<CloseInstructorAttendanceSessionResult> {
+  const organizationId = getInstructorOrganizationId(authContext);
+  const normalizedSessionId = sessionId.trim();
+
+  if (!normalizedSessionId) {
+    return {
+      ok: false,
+      message: "Kapatmak için geçerli bir yoklama oturumu seçin.",
+    };
+  }
+
+  try {
+    const session = await db.attendanceSession.findFirst({
+      where: {
+        id: normalizedSessionId,
+        organizationId,
+        section: {
+          is: {
+            instructorMembershipId: authContext.membership.id,
+          },
+        },
+      },
+      select: {
+        id: true,
+        status: true,
+      },
+    });
+
+    if (!session) {
+      return {
+        ok: false,
+        message: "Yoklama oturumu bulunamadı.",
+      };
+    }
+
+    if (session.status === AttendanceSessionStatus.CLOSED) {
+      return {
+        ok: true,
+        sessionId: session.id,
+      };
+    }
+
+    if (session.status !== AttendanceSessionStatus.ACTIVE) {
+      return {
+        ok: false,
+        message: "Yalnızca aktif yoklama oturumları kapatılabilir.",
+      };
+    }
+
+    await db.$transaction([
+      db.attendanceSession.update({
+        where: {
+          id_organizationId: {
+            id: session.id,
+            organizationId,
+          },
+        },
+        data: {
+          status: AttendanceSessionStatus.CLOSED,
+        },
+      }),
+      db.auditLog.create({
+        data: {
+          organizationId,
+          actorUserId: authContext.user.id,
+          action: "attendance_session.closed_by_instructor",
+          targetType: "AttendanceSession",
+          targetId: session.id,
+        },
+      }),
+    ]);
+
+    return {
+      ok: true,
+      sessionId: session.id,
+    };
+  } catch {
+    return {
+      ok: false,
+      message: "Oturum şu anda kapatılamadı. Lütfen tekrar deneyin.",
     };
   }
 }

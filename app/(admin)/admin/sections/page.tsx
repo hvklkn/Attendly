@@ -5,7 +5,10 @@ import { PageHeader } from "@/components/ui/PageHeader";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { routes } from "@/constants/routes";
-import { assignAdminSectionInstructorAction } from "@/lib/admin/section-actions";
+import {
+  assignAdminSectionInstructorAction,
+  assignAdminSectionStudentAction,
+} from "@/lib/admin/section-actions";
 import { requireAdminAuthContext } from "@/lib/admin/auth";
 import {
   getAdminSectionCreateOptionsData,
@@ -18,6 +21,8 @@ type AdminSectionsPageProps = {
     q?: string | string[];
     created?: string | string[];
     assigned?: string | string[];
+    studentAssigned?: string | string[];
+    alreadyAssigned?: string | string[];
     error?: string | string[];
   }>;
 };
@@ -88,6 +93,51 @@ function AssignResponsibleForm({
   );
 }
 
+function AssignStudentForm({
+  sectionId,
+  studentCandidates,
+}: {
+  sectionId: string;
+  studentCandidates: Array<{
+    id: string;
+    user: {
+      name: string | null;
+      email: string;
+    };
+  }>;
+}) {
+  if (studentCandidates.length === 0) {
+    return <span className="text-neutral-500">Aktif öğrenci yok</span>;
+  }
+
+  return (
+    <form action={assignAdminSectionStudentAction} className="grid gap-2">
+      <input type="hidden" name="sectionId" value={sectionId} />
+      <label>
+        <span className="sr-only">Öğrenci Ata</span>
+        <select
+          name="studentMembershipId"
+          required
+          className="h-9 w-full rounded-md border border-neutral-300 bg-white px-2 text-sm text-neutral-700 outline-none transition focus:border-neutral-500"
+        >
+          <option value="">Öğrenci seçin</option>
+          {studentCandidates.map((membership) => (
+            <option key={membership.id} value={membership.id}>
+              {formatPerson(membership.user)}
+            </option>
+          ))}
+        </select>
+      </label>
+      <button
+        type="submit"
+        className="inline-flex h-8 items-center justify-center rounded-md bg-neutral-950 px-3 text-xs font-medium text-white transition hover:bg-neutral-800"
+      >
+        Şubeye Ata
+      </button>
+    </form>
+  );
+}
+
 export default async function AdminSectionsPage({
   searchParams,
 }: AdminSectionsPageProps) {
@@ -96,6 +146,10 @@ export default async function AdminSectionsPage({
   const query = getSearchValue(resolvedSearchParams?.q).trim();
   const created = getSearchValue(resolvedSearchParams?.created) === "1";
   const assigned = getSearchValue(resolvedSearchParams?.assigned) === "1";
+  const studentAssigned =
+    getSearchValue(resolvedSearchParams?.studentAssigned) === "1";
+  const alreadyAssigned =
+    getSearchValue(resolvedSearchParams?.alreadyAssigned) === "1";
   const errorMessage = getSearchValue(resolvedSearchParams?.error);
   const [sections, options] = await Promise.all([
     getAdminSectionsData(authContext, { query }),
@@ -126,6 +180,16 @@ export default async function AdminSectionsPage({
       {assigned ? (
         <div className="rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-700">
           Ders grubu güncellendi. Sorumlu kişi başarıyla atandı.
+        </div>
+      ) : null}
+      {studentAssigned ? (
+        <div className="rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-700">
+          Öğrenci ders grubuna atandı.
+        </div>
+      ) : null}
+      {alreadyAssigned ? (
+        <div className="rounded-md border border-sky-200 bg-sky-50 px-4 py-3 text-sm font-medium text-sky-700">
+          Öğrenci bu ders grubunda zaten aktif kayıtlı.
         </div>
       ) : null}
       {errorMessage ? (
@@ -171,6 +235,7 @@ export default async function AdminSectionsPage({
                     <th className="px-4 py-3">Ders / Kurs</th>
                     <th className="px-4 py-3">Atanmış Sorumlu</th>
                     <th className="px-4 py-3">Kayıtlı Öğrenciler</th>
+                    <th className="px-4 py-3">Öğrenci Ata</th>
                     <th className="px-4 py-3">Yoklama Oturumları</th>
                     <th className="px-4 py-3">Durum</th>
                   </tr>
@@ -196,6 +261,12 @@ export default async function AdminSectionsPage({
                       </td>
                       <td className="px-4 py-4 text-neutral-600">
                         {section._count.enrollments}
+                      </td>
+                      <td className="px-4 py-4 text-neutral-600">
+                        <AssignStudentForm
+                          sectionId={section.id}
+                          studentCandidates={options.studentCandidates}
+                        />
                       </td>
                       <td className="px-4 py-4 text-neutral-600">
                         {section._count.attendanceSessions}
@@ -266,6 +337,15 @@ export default async function AdminSectionsPage({
                           {section._count.attendanceSessions}
                         </dd>
                       </div>
+                    </div>
+                    <div>
+                      <dt className="text-neutral-500">Öğrenci Ata</dt>
+                      <dd className="mt-2">
+                        <AssignStudentForm
+                          sectionId={section.id}
+                          studentCandidates={options.studentCandidates}
+                        />
+                      </dd>
                     </div>
                   </dl>
                 </article>

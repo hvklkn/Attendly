@@ -34,6 +34,12 @@ export const adminNavigation: RoleNavigation = {
       icon: "courses",
     },
     {
+      title: "Odalar",
+      href: routes.admin.rooms,
+      description: "Derslik ve konum alanları",
+      icon: "rooms",
+    },
+    {
       title: "Yoklama Oturumları",
       href: routes.admin.sessions,
       description: "Yoklama oturumlarını yönetin",

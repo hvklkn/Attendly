@@ -6,9 +6,9 @@ import {
   CheckCircle2,
   Clock3,
   ListChecks,
+  Lock,
   MapPin,
   PlayCircle,
-  QrCode,
   Users,
 } from "lucide-react";
 import { ButtonLink } from "@/components/ui/ButtonLink";
@@ -19,7 +19,10 @@ import { StatCard } from "@/components/ui/StatCard";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { routes } from "@/constants/routes";
 import { requireInstructorAuthContext } from "@/lib/instructor/auth";
-import { startInstructorSessionAction } from "@/lib/instructor/session-actions";
+import {
+  closeInstructorSessionAction,
+  startInstructorSessionAction,
+} from "@/lib/instructor/session-actions";
 import { getInstructorSessionDetailData } from "@/lib/instructor/queries";
 import {
   formatDateTimeTr,
@@ -27,6 +30,10 @@ import {
   getAttendanceSessionStatusLabel,
   getPresenceCheckStatusLabel,
 } from "@/lib/localization";
+import {
+  AttendanceReportExportButton,
+  type AttendanceReportCsvRow,
+} from "./AttendanceReportExportButton";
 import { InstructorSessionQrTokenPanel } from "./InstructorSessionQrTokenPanel";
 
 type InstructorSessionDetailPageProps = {
@@ -34,6 +41,8 @@ type InstructorSessionDetailPageProps = {
     sessionId: string;
   }>;
   searchParams?: Promise<{
+    closed?: string | string[];
+    closeError?: string | string[];
     started?: string | string[];
     startError?: string | string[];
   }>;
@@ -71,20 +80,27 @@ function formatDecimalMeters(
   return `${Number(value.toString()).toFixed(0)} metre`;
 }
 
-function formatCoordinates(
-  latitude: { toString: () => string } | null,
-  longitude: { toString: () => string } | null,
-) {
-  if (!latitude || !longitude) {
-    return "Belirtilmedi";
+function formatPercentage(numerator: number, denominator: number) {
+  if (denominator <= 0) {
+    return "0%";
   }
 
-  return `${latitude.toString()}, ${longitude.toString()}`;
+  return `${Math.round((numerator / denominator) * 100)}%`;
+}
+
+function createReportFileName(sessionTitle: string) {
+  const normalizedTitle = sessionTitle
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+
+  return `${normalizedTitle || "yoklama"}-raporu.csv`;
 }
 
 function getSessionTone(status: string) {
   if (status === "ACTIVE") return "success" as const;
   if (status === "DRAFT") return "warning" as const;
+  if (status === "CLOSED") return "neutral" as const;
   if (status === "CANCELLED") return "danger" as const;
   return "info" as const;
 }
@@ -200,6 +216,14 @@ export default async function InstructorSessionDetailPage({
 
   const { session } = data;
   const latestQrToken = data.latestQrToken;
+  const closed =
+    (Array.isArray(resolvedSearchParams?.closed)
+      ? resolvedSearchParams?.closed[0]
+      : resolvedSearchParams?.closed) === "1";
+  const closeError =
+    (Array.isArray(resolvedSearchParams?.closeError)
+      ? resolvedSearchParams?.closeError[0]
+      : resolvedSearchParams?.closeError) === "1";
   const started =
     (Array.isArray(resolvedSearchParams?.started)
       ? resolvedSearchParams?.started[0]
@@ -216,6 +240,72 @@ export default async function InstructorSessionDetailPage({
   const courseAndSection = session.section.code
     ? `${session.section.course.code} - ${session.section.code} - ${session.section.name}`
     : `${session.section.course.code} - ${session.section.name}`;
+  const activeEnrollments = [...session.section.enrollments].sort((left, right) =>
+    (left.studentMembership.user.name ?? left.studentMembership.user.email)
+      .localeCompare(
+        right.studentMembership.user.name ?? right.studentMembership.user.email,
+        "tr",
+      ),
+  );
+  const reportRows = activeEnrollments.map((enrollment) => {
+    const record = enrollment.attendanceRecords[0] ?? null;
+    const latestPresenceCheck = record?.presenceChecks[0] ?? null;
+    const studentName =
+      enrollment.studentMembership.user.name ?? "İsimsiz öğrenci";
+    const statusLabel = record
+      ? getAttendanceRecordStatusLabel(record.status)
+      : "Katılmadı";
+    const checkedInAt = record?.checkedInAt
+      ? formatDateTimeTr(record.checkedInAt)
+      : "Henüz giriş yok";
+    const distance = record
+      ? formatDecimalMeters(record.distanceMeters)
+      : "Belirtilmedi";
+    const locationVerification = record
+      ? getLocationVerificationLabel(latestPresenceCheck?.status, record.status)
+      : "Yoklama kaydı yok";
+
+    return {
+      enrollmentId: enrollment.id,
+      studentName,
+      email: enrollment.studentMembership.user.email,
+      courseSection: courseAndSection,
+      statusLabel,
+      statusTone: record ? getAttendanceTone(record.status) : "danger",
+      checkedInAt,
+      distance,
+      locationVerification,
+      locationVerificationTone: record
+        ? getLocationVerificationTone(latestPresenceCheck?.status, record.status)
+        : "neutral",
+      recordStatus: record?.status ?? null,
+    };
+  });
+  const csvRows: AttendanceReportCsvRow[] = reportRows.map((row) => ({
+    studentName: row.studentName,
+    email: row.email,
+    courseSection: row.courseSection,
+    status: row.statusLabel,
+    checkedInAt: row.checkedInAt,
+    distance: row.distance,
+    locationVerification: row.locationVerification,
+  }));
+  const totalRegisteredStudents = reportRows.length;
+  const presentCount = reportRows.filter(
+    (row) => row.recordStatus === "PRESENT" || row.recordStatus === "MANUAL",
+  ).length;
+  const lateCount = reportRows.filter(
+    (row) => row.recordStatus === "LATE",
+  ).length;
+  const rejectedCount = reportRows.filter(
+    (row) => row.recordStatus === "REJECTED",
+  ).length;
+  const absentCount = reportRows.filter((row) => !row.recordStatus).length;
+  const acceptedAttendanceCount = presentCount + lateCount;
+  const attendanceRate = formatPercentage(
+    acceptedAttendanceCount,
+    totalRegisteredStudents,
+  );
 
   const overviewItems = [
     { label: "Açıklama", value: session.description ?? "Açıklama yok" },
@@ -323,36 +413,52 @@ export default async function InstructorSessionDetailPage({
 
   const summaryStats = [
     {
-      label: "Yoklama Kayıtları",
-      value: String(session._count.attendanceRecords),
-      trend: "Toplam",
-      description: "Bu oturum için kayıtlı yoklama sayısı.",
-      icon: <ListChecks className="h-4 w-4" aria-hidden="true" />,
-      tone: "info" as const,
-    },
-    {
-      label: "Katılan",
-      value: String(data.attendedRecords),
-      trend: "Katıldı/geç/manuel",
-      description: "Yoklamada olumlu sayılan kayıtlar.",
-      icon: <CheckCircle2 className="h-4 w-4" aria-hidden="true" />,
-      tone: "success" as const,
-    },
-    {
-      label: "Öğrenci",
-      value: String(session.section._count.enrollments),
-      trend: "Kayıtlı",
-      description: "Bu şubeye kayıtlı öğrenci sayısı.",
+      label: "Toplam Kayıtlı",
+      value: String(totalRegisteredStudents),
+      trend: "öğrenci",
+      description: "Bu şubedeki aktif kayıtlı öğrenci sayısı.",
       icon: <Users className="h-4 w-4" aria-hidden="true" />,
       tone: "neutral" as const,
     },
     {
-      label: "QR",
-      value: String(session._count.qrTokens),
-      trend: latestQrToken ? "Son QR yüklendi" : "Henüz yok",
-      description: "Bu oturum için oluşturulan QR geçmişi.",
-      icon: <QrCode className="h-4 w-4" aria-hidden="true" />,
+      label: "Katılan",
+      value: String(presentCount),
+      trend: "zamanında",
+      description: "Zamanında veya manuel kabul edilen kayıtlar.",
+      icon: <CheckCircle2 className="h-4 w-4" aria-hidden="true" />,
+      tone: "success" as const,
+    },
+    {
+      label: "Geç Katılan",
+      value: String(lateCount),
+      trend: "geç",
+      description: "Geç kalma eşiğinden sonra katılan öğrenciler.",
+      icon: <Clock3 className="h-4 w-4" aria-hidden="true" />,
       tone: "warning" as const,
+    },
+    {
+      label: "Reddedilen",
+      value: String(rejectedCount),
+      trend: "konum dışı",
+      description: "Konum doğrulaması nedeniyle reddedilen kayıtlar.",
+      icon: <AlertTriangle className="h-4 w-4" aria-hidden="true" />,
+      tone: "danger" as const,
+    },
+    {
+      label: "Katılmayan",
+      value: String(absentCount),
+      trend: "kayıt yok",
+      description: "Aktif enrollment listesinde olup kayıt oluşturmayanlar.",
+      icon: <ListChecks className="h-4 w-4" aria-hidden="true" />,
+      tone: "warning" as const,
+    },
+    {
+      label: "Katılım Oranı",
+      value: attendanceRate,
+      trend: `${acceptedAttendanceCount}/${totalRegisteredStudents}`,
+      description: "Katılan ve geç katılanların toplam öğrenciye oranı.",
+      icon: <CalendarClock className="h-4 w-4" aria-hidden="true" />,
+      tone: "info" as const,
     },
   ];
 
@@ -381,6 +487,18 @@ export default async function InstructorSessionDetailPage({
             </button>
           </form>
         ) : null}
+        {session.status === "ACTIVE" ? (
+          <form action={closeInstructorSessionAction}>
+            <input type="hidden" name="sessionId" value={session.id} />
+            <button
+              type="submit"
+              className="inline-flex h-9 items-center justify-center gap-2 rounded-md border border-neutral-300 bg-white px-4 text-sm font-medium text-neutral-700 transition hover:border-neutral-400 hover:text-neutral-950"
+            >
+              <Lock className="h-4 w-4" aria-hidden="true" />
+              Yoklamayı Kapat
+            </button>
+          </form>
+        ) : null}
         <StatusBadge
           label={getAttendanceSessionStatusLabel(session.status)}
           tone={getSessionTone(session.status)}
@@ -400,7 +518,20 @@ export default async function InstructorSessionDetailPage({
         </div>
       ) : null}
 
-      <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      {closed ? (
+        <div className="rounded-md border border-neutral-200 bg-neutral-50 px-4 py-3 text-sm font-medium text-neutral-700">
+          Yoklama oturumu kapatıldı. Bu oturum için yeni QR üretilemez.
+        </div>
+      ) : null}
+
+      {closeError ? (
+        <div className="rounded-md border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-700">
+          Oturum şu anda kapatılamadı. Lütfen durumu kontrol edip tekrar
+          deneyin.
+        </div>
+      ) : null}
+
+      <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
         {summaryStats.map((stat) => (
           <StatCard key={stat.label} {...stat} />
         ))}
@@ -535,166 +666,124 @@ export default async function InstructorSessionDetailPage({
       </section>
 
       <SectionCard
-        title="Son Yoklama Kayıtları"
-        description="Öğrenci QR okuttuğunda konum sonucu bu listede görünür."
+        title="Yoklama Raporu"
+        description="Aktif enrollment listesindeki tüm öğrenciler ve bu oturumdaki yoklama durumları."
+        actions={
+          <AttendanceReportExportButton
+            rows={csvRows}
+            fileName={createReportFileName(session.title)}
+          />
+        }
       >
-        {session.attendanceRecords.length > 0 ? (
+        {reportRows.length > 0 ? (
           <>
-            <div className="hidden overflow-hidden rounded-lg border border-neutral-200 md:block">
+            <div className="hidden overflow-x-auto rounded-lg border border-neutral-200 lg:block">
               <table className="w-full border-collapse text-left text-sm">
                 <thead className="bg-neutral-50 text-xs font-medium uppercase tracking-normal text-neutral-500">
                   <tr>
-                    <th className="px-4 py-3">Öğrenci</th>
+                    <th className="px-4 py-3">Öğrenci adı</th>
+                    <th className="px-4 py-3">Email</th>
+                    <th className="px-4 py-3">Ders/Şube</th>
                     <th className="px-4 py-3">Durum</th>
-                    <th className="px-4 py-3">Yoklama Zamanı</th>
+                    <th className="px-4 py-3">Giriş zamanı</th>
                     <th className="px-4 py-3">Mesafe</th>
-                    <th className="px-4 py-3">Konum</th>
+                    <th className="px-4 py-3">Konum doğrulama sonucu</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-neutral-100 bg-white">
-                  {session.attendanceRecords.map((record) => {
-                    const latestPresenceCheck = record.presenceChecks[0] ?? null;
-
-                    return (
-                      <tr key={record.id}>
-                        <td className="px-4 py-4">
-                          <p className="font-medium text-neutral-950">
-                            {record.studentUser.name ?? "İsimsiz öğrenci"}
-                          </p>
-                          <p className="mt-1 text-xs text-neutral-500">
-                            {record.studentUser.email}
-                          </p>
-                        </td>
-                        <td className="px-4 py-4">
-                          <StatusBadge
-                            label={getAttendanceRecordStatusLabel(record.status)}
-                            tone={getAttendanceTone(record.status)}
-                          />
-                        </td>
-                        <td className="px-4 py-4 text-neutral-600">
-                          {record.checkedInAt
-                            ? formatDateTimeTr(record.checkedInAt)
-                            : "Henüz katılmadı"}
-                        </td>
-                        <td className="px-4 py-4 text-neutral-600">
-                          <p>{formatDecimalMeters(record.distanceMeters)}</p>
-                          <p className="mt-1 text-xs text-neutral-500">
-                            Doğruluk:{" "}
-                            {record.locationAccuracyMeters === null
-                              ? "Belirtilmedi"
-                              : `${record.locationAccuracyMeters} m`}
-                          </p>
-                        </td>
-                        <td className="px-4 py-4 text-neutral-600">
-                          <div className="grid gap-2">
-                            <StatusBadge
-                              label={getLocationVerificationLabel(
-                                latestPresenceCheck?.status,
-                                record.status,
-                              )}
-                              tone={getLocationVerificationTone(
-                                latestPresenceCheck?.status,
-                                record.status,
-                              )}
-                            />
-                            <p className="text-xs leading-5 text-neutral-500">
-                              {formatCoordinates(
-                                record.locationLatitude,
-                                record.locationLongitude,
-                              )}
-                            </p>
-                            {record.rejectionReason ? (
-                              <p className="text-xs leading-5 text-rose-700">
-                                {record.rejectionReason}
-                              </p>
-                            ) : null}
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
+                  {reportRows.map((row) => (
+                    <tr key={row.enrollmentId}>
+                      <td className="px-4 py-4 font-medium text-neutral-950">
+                        {row.studentName}
+                      </td>
+                      <td className="px-4 py-4 text-neutral-600">{row.email}</td>
+                      <td className="px-4 py-4 text-neutral-600">
+                        {row.courseSection}
+                      </td>
+                      <td className="px-4 py-4">
+                        <StatusBadge
+                          label={row.statusLabel}
+                          tone={row.statusTone}
+                        />
+                      </td>
+                      <td className="px-4 py-4 text-neutral-600">
+                        {row.checkedInAt}
+                      </td>
+                      <td className="px-4 py-4 text-neutral-600">
+                        {row.distance}
+                      </td>
+                      <td className="px-4 py-4">
+                        <StatusBadge
+                          label={row.locationVerification}
+                          tone={row.locationVerificationTone}
+                        />
+                      </td>
+                    </tr>
+                  ))}
                 </tbody>
               </table>
             </div>
 
-            <div className="grid gap-3 md:hidden">
-              {session.attendanceRecords.map((record) => {
-                const latestPresenceCheck = record.presenceChecks[0] ?? null;
-
-                return (
-                  <article
-                    key={record.id}
-                    className="rounded-lg border border-neutral-200 bg-white p-4"
-                  >
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <p className="font-medium text-neutral-950">
-                          {record.studentUser.name ?? "İsimsiz öğrenci"}
-                        </p>
-                        <p className="mt-1 truncate text-sm text-neutral-500">
-                          {record.studentUser.email}
-                        </p>
-                      </div>
-                      <StatusBadge
-                        label={getAttendanceRecordStatusLabel(record.status)}
-                        tone={getAttendanceTone(record.status)}
-                      />
-                    </div>
-                    <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-2">
-                      <div>
-                        <dt className="text-neutral-500">Yoklama zamanı</dt>
-                        <dd className="mt-1 font-medium text-neutral-900">
-                          {record.checkedInAt
-                            ? formatDateTimeTr(record.checkedInAt)
-                            : "Henüz katılmadı"}
-                        </dd>
-                      </div>
-                      <div>
-                        <dt className="text-neutral-500">Mesafe</dt>
-                        <dd className="mt-1 font-medium text-neutral-900">
-                          {formatDecimalMeters(record.distanceMeters)}
-                        </dd>
-                      </div>
-                      <div>
-                        <dt className="text-neutral-500">Konum sonucu</dt>
-                        <dd className="mt-1">
-                          <StatusBadge
-                            label={getLocationVerificationLabel(
-                              latestPresenceCheck?.status,
-                              record.status,
-                            )}
-                            tone={getLocationVerificationTone(
-                              latestPresenceCheck?.status,
-                              record.status,
-                            )}
-                          />
-                        </dd>
-                      </div>
-                      <div>
-                        <dt className="text-neutral-500">Konum</dt>
-                        <dd className="mt-1 font-medium text-neutral-900">
-                          {formatCoordinates(
-                            record.locationLatitude,
-                            record.locationLongitude,
-                          )}
-                        </dd>
-                      </div>
-                    </dl>
-                    {record.rejectionReason ? (
-                      <p className="mt-3 rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
-                        {record.rejectionReason}
+            <div className="grid gap-3 lg:hidden">
+              {reportRows.map((row) => (
+                <article
+                  key={row.enrollmentId}
+                  className="rounded-lg border border-neutral-200 bg-white p-4"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="font-medium text-neutral-950">
+                        {row.studentName}
                       </p>
-                    ) : null}
-                  </article>
-                );
-              })}
+                      <p className="mt-1 truncate text-sm text-neutral-500">
+                        {row.email}
+                      </p>
+                    </div>
+                    <StatusBadge
+                      label={row.statusLabel}
+                      tone={row.statusTone}
+                    />
+                  </div>
+                  <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-2">
+                    <div>
+                      <dt className="text-neutral-500">Ders/Şube</dt>
+                      <dd className="mt-1 font-medium text-neutral-900">
+                        {row.courseSection}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt className="text-neutral-500">Giriş zamanı</dt>
+                      <dd className="mt-1 font-medium text-neutral-900">
+                        {row.checkedInAt}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt className="text-neutral-500">Mesafe</dt>
+                      <dd className="mt-1 font-medium text-neutral-900">
+                        {row.distance}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt className="text-neutral-500">
+                        Konum doğrulama sonucu
+                      </dt>
+                      <dd className="mt-1">
+                        <StatusBadge
+                          label={row.locationVerification}
+                          tone={row.locationVerificationTone}
+                        />
+                      </dd>
+                    </div>
+                  </dl>
+                </article>
+              ))}
             </div>
           </>
         ) : (
           <EmptyState
-            title="Henüz yoklama kaydı yok"
-            description="Öğrenci QR kodu okutup konumu doğrulandığında kayıtlar burada listelenecek."
-            icon={<ListChecks className="h-5 w-5" aria-hidden="true" />}
+            title="Bu şubede aktif öğrenci yok"
+            description="Yoklama raporu oluşturmak için önce öğrenci-şube ataması yapılmalı."
+            icon={<Users className="h-5 w-5" aria-hidden="true" />}
           />
         )}
       </SectionCard>

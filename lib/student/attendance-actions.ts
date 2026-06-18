@@ -198,6 +198,15 @@ export async function submitStudentAttendanceAction(
       });
     }
 
+    if (qrToken.attendanceSession.status === AttendanceSessionStatus.CLOSED) {
+      return createActionResult({
+        ok: false,
+        code: "session_closed",
+        message: "Bu yoklama oturumu kapanmıştır.",
+        sessionId,
+      });
+    }
+
     if (qrToken.attendanceSession.status !== AttendanceSessionStatus.ACTIVE) {
       return createActionResult({
         ok: false,

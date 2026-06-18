@@ -1,6 +1,10 @@
 import "server-only";
 
-import { MembershipRole, UserStatus } from "@/lib/generated/prisma/enums";
+import {
+  EnrollmentStatus,
+  MembershipRole,
+  UserStatus,
+} from "@/lib/generated/prisma/enums";
 import { Prisma } from "@/lib/generated/prisma/client";
 import {
   getInstructorOrganizationId,
@@ -26,6 +30,26 @@ export type CreateInstructorStudentEnrollmentResult =
       ok: false;
       message: string;
       errors?: InstructorStudentCreateFormErrors;
+    };
+
+export type AssignInstructorStudentToSectionResult =
+  | {
+      ok: true;
+      enrollmentId: string;
+    }
+  | {
+      ok: false;
+      message: string;
+    };
+
+export type DeactivateInstructorEnrollmentResult =
+  | {
+      ok: true;
+      enrollmentId: string;
+    }
+  | {
+      ok: false;
+      message: string;
     };
 
 function isUniqueConstraintError(error: unknown) {
@@ -259,6 +283,248 @@ export async function createInstructorStudentEnrollment(
     return {
       ok: false,
       message: "Öğrenci şu anda eklenemedi. Lütfen tekrar deneyin.",
+    };
+  }
+}
+
+export async function assignInstructorStudentToSection(
+  authContext: InstructorAuthContext,
+  input: {
+    studentMembershipId: string;
+    sectionId: string;
+  },
+): Promise<AssignInstructorStudentToSectionResult> {
+  if (authContext.role !== MembershipRole.INSTRUCTOR) {
+    return {
+      ok: false,
+      message: "Bu işlem için öğretmen yetkisi gerekir.",
+    };
+  }
+
+  const organizationId = getInstructorOrganizationId(authContext);
+  const studentMembershipId = input.studentMembershipId.trim();
+  const sectionId = input.sectionId.trim();
+
+  if (!studentMembershipId || !sectionId) {
+    return {
+      ok: false,
+      message: "Öğrenci ve şube seçimi gereklidir.",
+    };
+  }
+
+  try {
+    return await db.$transaction(async (tx) => {
+      const [studentMembership, section] = await Promise.all([
+        tx.membership.findFirst({
+          where: {
+            id: studentMembershipId,
+            organizationId,
+            role: MembershipRole.STUDENT,
+          },
+          select: {
+            id: true,
+            userId: true,
+          },
+        }),
+        tx.section.findFirst({
+          where: {
+            id: sectionId,
+            organizationId,
+            isActive: true,
+          },
+          select: {
+            id: true,
+          },
+        }),
+      ]);
+
+      if (!studentMembership) {
+        return {
+          ok: false,
+          message: "Bu kurumda geçerli bir öğrenci seçin.",
+        };
+      }
+
+      if (!section) {
+        return {
+          ok: false,
+          message: "Bu kurumda aktif bir şube seçin.",
+        };
+      }
+
+      const existingEnrollment = await tx.enrollment.findUnique({
+        where: {
+          organizationId_sectionId_studentMembershipId: {
+            organizationId,
+            sectionId: section.id,
+            studentMembershipId: studentMembership.id,
+          },
+        },
+        select: {
+          id: true,
+          status: true,
+        },
+      });
+
+      if (existingEnrollment?.status === EnrollmentStatus.ACTIVE) {
+        return {
+          ok: true,
+          enrollmentId: existingEnrollment.id,
+        };
+      }
+
+      const enrollment = existingEnrollment
+        ? await tx.enrollment.update({
+            where: {
+              id_organizationId: {
+                id: existingEnrollment.id,
+                organizationId,
+              },
+            },
+            data: {
+              status: EnrollmentStatus.ACTIVE,
+              endedAt: null,
+            },
+            select: {
+              id: true,
+            },
+          })
+        : await tx.enrollment.create({
+            data: {
+              organizationId,
+              sectionId: section.id,
+              studentMembershipId: studentMembership.id,
+              status: EnrollmentStatus.ACTIVE,
+            },
+            select: {
+              id: true,
+            },
+          });
+
+      await tx.auditLog.create({
+        data: {
+          organizationId,
+          actorUserId: authContext.user.id,
+          action: existingEnrollment
+            ? "enrollment.reactivated"
+            : "enrollment.assigned",
+          targetType: "Enrollment",
+          targetId: enrollment.id,
+          metadata: {
+            sectionId: section.id,
+            studentMembershipId: studentMembership.id,
+            studentUserId: studentMembership.userId,
+          },
+        },
+      });
+
+      return {
+        ok: true,
+        enrollmentId: enrollment.id,
+      };
+    });
+  } catch (error) {
+    if (isUniqueConstraintError(error)) {
+      return {
+        ok: false,
+        message: "Bu öğrenci bu şubeye zaten kayıtlı.",
+      };
+    }
+
+    return {
+      ok: false,
+      message: "Öğrenci şu anda şubeye atanamadı. Lütfen tekrar deneyin.",
+    };
+  }
+}
+
+export async function deactivateInstructorEnrollment(
+  authContext: InstructorAuthContext,
+  enrollmentId: string,
+): Promise<DeactivateInstructorEnrollmentResult> {
+  if (authContext.role !== MembershipRole.INSTRUCTOR) {
+    return {
+      ok: false,
+      message: "Bu işlem için öğretmen yetkisi gerekir.",
+    };
+  }
+
+  const organizationId = getInstructorOrganizationId(authContext);
+  const normalizedEnrollmentId = enrollmentId.trim();
+
+  if (!normalizedEnrollmentId) {
+    return {
+      ok: false,
+      message: "Pasifleştirilecek kayıt seçilmelidir.",
+    };
+  }
+
+  try {
+    const enrollment = await db.enrollment.findFirst({
+      where: {
+        id: normalizedEnrollmentId,
+        organizationId,
+      },
+      select: {
+        id: true,
+        status: true,
+        sectionId: true,
+        studentMembershipId: true,
+      },
+    });
+
+    if (!enrollment) {
+      return {
+        ok: false,
+        message: "Kayıt bulunamadı.",
+      };
+    }
+
+    if (enrollment.status === EnrollmentStatus.INACTIVE) {
+      return {
+        ok: true,
+        enrollmentId: enrollment.id,
+      };
+    }
+
+    const updatedEnrollment = await db.enrollment.update({
+      where: {
+        id_organizationId: {
+          id: enrollment.id,
+          organizationId,
+        },
+      },
+      data: {
+        status: EnrollmentStatus.INACTIVE,
+        endedAt: new Date(),
+      },
+      select: {
+        id: true,
+      },
+    });
+
+    await db.auditLog.create({
+      data: {
+        organizationId,
+        actorUserId: authContext.user.id,
+        action: "enrollment.deactivated",
+        targetType: "Enrollment",
+        targetId: updatedEnrollment.id,
+        metadata: {
+          sectionId: enrollment.sectionId,
+          studentMembershipId: enrollment.studentMembershipId,
+        },
+      },
+    });
+
+    return {
+      ok: true,
+      enrollmentId: updatedEnrollment.id,
+    };
+  } catch {
+    return {
+      ok: false,
+      message: "Öğrenci kaydı şu anda pasifleştirilemedi.",
     };
   }
 }

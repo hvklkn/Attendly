@@ -60,6 +60,7 @@ enum AttendanceSource {
 
 enum EnrollmentStatus {
   ACTIVE
+  INACTIVE
   COMPLETED
   WITHDRAWN
   SUSPENDED

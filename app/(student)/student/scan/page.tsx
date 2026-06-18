@@ -98,6 +98,16 @@ function getScanStateContent(
     };
   }
 
+  if (status === "session_closed") {
+    return {
+      title: "Bu yoklama oturumu kapanmıştır.",
+      description: "Bu oturum için yeni yoklama kaydı alınmıyor.",
+      badge: "Kapandı",
+      tone: "neutral",
+      icon: <Ban className="h-5 w-5" aria-hidden="true" />,
+    };
+  }
+
   return {
     title: "Oturum uygun değil",
     description: "Bu oturum şu anda yoklama için uygun değil.",

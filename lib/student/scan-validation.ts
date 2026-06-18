@@ -10,6 +10,7 @@ export type StudentScanValidationStatus =
   | "invalid_token"
   | "revoked_token"
   | "expired_token"
+  | "session_closed"
   | "session_unavailable"
   | "valid";
 
@@ -150,6 +151,12 @@ export async function validateStudentScanToken(
     if (qrToken.expiresAt.getTime() <= now.getTime()) {
       return {
         status: "expired_token",
+      };
+    }
+
+    if (qrToken.attendanceSession.status === AttendanceSessionStatus.CLOSED) {
+      return {
+        status: "session_closed",
       };
     }
 

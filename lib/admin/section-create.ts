@@ -14,6 +14,13 @@ export type AdminSectionCreateOptionsData = {
       email: string;
     };
   }>;
+  studentCandidates: Array<{
+    id: string;
+    user: {
+      name: string | null;
+      email: string;
+    };
+  }>;
 };
 
 export type AdminSectionCreateFormValues = {

@@ -69,6 +69,7 @@ const organizationStatusLabels: Record<OrganizationStatus, string> = {
 
 const enrollmentStatusLabels: Record<EnrollmentStatus, string> = {
   ACTIVE: "Aktif",
+  INACTIVE: "Pasif",
   COMPLETED: "Tamamlandı",
   WITHDRAWN: "Ayrıldı",
   SUSPENDED: "Askıya Alındı",

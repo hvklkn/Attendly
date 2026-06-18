@@ -11,6 +11,7 @@ import {
 } from "@/lib/admin/section-create";
 import {
   assignAdminSectionInstructor,
+  assignAdminSectionStudent,
   createAdminSection,
 } from "@/lib/admin/section-mutations";
 
@@ -82,4 +83,36 @@ export async function assignAdminSectionInstructorAction(formData: FormData) {
   }
 
   redirect(`${routes.admin.sections}?assigned=1`);
+}
+
+export async function assignAdminSectionStudentAction(formData: FormData) {
+  const sectionId = String(formData.get("sectionId") ?? "");
+  const studentMembershipId = String(formData.get("studentMembershipId") ?? "");
+  const authContext = await requireAdminAuthContext();
+  const result = await assignAdminSectionStudent(authContext, {
+    sectionId,
+    studentMembershipId,
+  });
+
+  revalidatePath(routes.admin.sections);
+  revalidatePath(routes.admin.users);
+  revalidatePath(routes.admin.sessions);
+  revalidatePath(routes.admin.dashboard);
+  revalidatePath(routes.instructor.students);
+  revalidatePath(routes.instructor.studentCreate);
+  revalidatePath(routes.instructor.sessionCreate);
+
+  if (!result.ok) {
+    const searchParams = new URLSearchParams({
+      error: result.message,
+    });
+
+    redirect(`${routes.admin.sections}?${searchParams.toString()}`);
+  }
+
+  redirect(
+    `${routes.admin.sections}?${
+      result.alreadyAssigned ? "alreadyAssigned=1" : "studentAssigned=1"
+    }`,
+  );
 }

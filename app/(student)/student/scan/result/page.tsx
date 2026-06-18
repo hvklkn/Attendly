@@ -53,6 +53,7 @@ const RESULT_CODES = new Set<StudentScanResultCode>([
   "expired_token",
   "revoked_token",
   "invalid_token",
+  "session_closed",
   "session_unavailable",
   "location_unavailable",
   "error",
@@ -136,6 +137,16 @@ function getResultContent(code: StudentScanResultCode): ResultContent {
       title: "Yoklamanız zaten kayıtlı.",
       description: "Bu oturum için daha önce oluşturulan kayıt gösteriliyor.",
       badge: "Zaten kayıtlı",
+      tone: "neutral",
+      icon: <Ban className="h-5 w-5" aria-hidden="true" />,
+    };
+  }
+
+  if (code === "session_closed") {
+    return {
+      title: "Bu yoklama oturumu kapanmıştır.",
+      description: "Bu oturum için yeni yoklama kaydı alınmıyor.",
+      badge: "Kapandı",
       tone: "neutral",
       icon: <Ban className="h-5 w-5" aria-hidden="true" />,
     };
