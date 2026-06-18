@@ -21,10 +21,23 @@ export function getQrTokenExpiresAt(
   return new Date(issuedAt.getTime() + ttlSeconds * 1000);
 }
 
-export function createQrScanUrl(token: string) {
+function getConfiguredAppBaseUrl(fallbackOrigin?: string) {
+  return (
+    process.env.NEXT_PUBLIC_APP_URL?.trim() ||
+    fallbackOrigin?.trim() ||
+    "http://localhost:3000"
+  );
+}
+
+function normalizeBaseUrl(baseUrl: string) {
+  return baseUrl.endsWith("/") ? baseUrl : `${baseUrl}/`;
+}
+
+export function createQrScanUrl(token: string, fallbackOrigin?: string) {
   const searchParams = new URLSearchParams({
     token,
   });
+  const relativeScanUrl = `${routes.student.scan}?${searchParams.toString()}`;
 
-  return `${routes.student.scan}?${searchParams.toString()}`;
+  return new URL(relativeScanUrl, normalizeBaseUrl(getConfiguredAppBaseUrl(fallbackOrigin))).toString();
 }

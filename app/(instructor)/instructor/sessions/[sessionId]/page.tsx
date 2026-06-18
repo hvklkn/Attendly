@@ -7,6 +7,7 @@ import {
   Clock3,
   ListChecks,
   MapPin,
+  PlayCircle,
   QrCode,
   Users,
 } from "lucide-react";
@@ -18,18 +19,24 @@ import { StatCard } from "@/components/ui/StatCard";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { routes } from "@/constants/routes";
 import { requireInstructorAuthContext } from "@/lib/instructor/auth";
+import { startInstructorSessionAction } from "@/lib/instructor/session-actions";
 import { getInstructorSessionDetailData } from "@/lib/instructor/queries";
 import {
   formatDateTimeTr,
   getAttendanceRecordStatusLabel,
   getAttendanceSessionGeofenceSourceLabel,
   getAttendanceSessionStatusLabel,
+  getPresenceCheckStatusLabel,
 } from "@/lib/localization";
 import { InstructorSessionQrTokenPanel } from "./InstructorSessionQrTokenPanel";
 
 type InstructorSessionDetailPageProps = {
   params: Promise<{
     sessionId: string;
+  }>;
+  searchParams?: Promise<{
+    started?: string | string[];
+    startError?: string | string[];
   }>;
 };
 
@@ -95,6 +102,44 @@ function getAttendanceTone(status: string) {
   return "info" as const;
 }
 
+function getPresenceCheckTone(status: string | null | undefined) {
+  if (status === "INSIDE_GEOFENCE" || status === "VERIFIED") {
+    return "success" as const;
+  }
+
+  if (status === "OUTSIDE_GEOFENCE" || status === "SUSPICIOUS") {
+    return "danger" as const;
+  }
+
+  if (status === "LOCATION_UNAVAILABLE" || status === "QR_NOT_CONFIRMED") {
+    return "warning" as const;
+  }
+
+  return "neutral" as const;
+}
+
+function getLocationVerificationLabel(
+  status: string | null | undefined,
+  recordStatus: string,
+) {
+  if (status) {
+    return getPresenceCheckStatusLabel(status);
+  }
+
+  return recordStatus === "REJECTED" ? "Konum dışı" : "Konum içi";
+}
+
+function getLocationVerificationTone(
+  status: string | null | undefined,
+  recordStatus: string,
+) {
+  if (status) {
+    return getPresenceCheckTone(status);
+  }
+
+  return recordStatus === "REJECTED" ? "danger" : "success";
+}
+
 function DetailList({
   items,
 }: {
@@ -117,8 +162,12 @@ function DetailList({
 
 export default async function InstructorSessionDetailPage({
   params,
+  searchParams,
 }: InstructorSessionDetailPageProps) {
-  const { sessionId } = await params;
+  const [{ sessionId }, resolvedSearchParams] = await Promise.all([
+    params,
+    searchParams,
+  ]);
   const authContext = await requireInstructorAuthContext();
   const data = await getInstructorSessionDetailData(authContext, sessionId);
 
@@ -128,6 +177,14 @@ export default async function InstructorSessionDetailPage({
 
   const { session } = data;
   const latestQrToken = data.latestQrToken;
+  const started =
+    (Array.isArray(resolvedSearchParams?.started)
+      ? resolvedSearchParams?.started[0]
+      : resolvedSearchParams?.started) === "1";
+  const startError =
+    (Array.isArray(resolvedSearchParams?.startError)
+      ? resolvedSearchParams?.startError[0]
+      : resolvedSearchParams?.startError) === "1";
   const room = session.room
     ? session.room.code
       ? `${session.room.code} - ${session.room.name}`
@@ -259,11 +316,36 @@ export default async function InstructorSessionDetailPage({
         >
           Geri
         </ButtonLink>
+        {session.status === "DRAFT" || session.status === "SCHEDULED" ? (
+          <form action={startInstructorSessionAction}>
+            <input type="hidden" name="sessionId" value={session.id} />
+            <button
+              type="submit"
+              className="inline-flex h-9 items-center justify-center gap-2 rounded-md bg-neutral-950 px-4 text-sm font-medium text-white transition hover:bg-neutral-800"
+            >
+              <PlayCircle className="h-4 w-4" aria-hidden="true" />
+              Oturumu Başlat
+            </button>
+          </form>
+        ) : null}
         <StatusBadge
           label={getAttendanceSessionStatusLabel(session.status)}
           tone={getSessionTone(session.status)}
         />
       </PageHeader>
+
+      {started ? (
+        <div className="rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-700">
+          Yoklama oturumu başlatıldı.
+        </div>
+      ) : null}
+
+      {startError ? (
+        <div className="rounded-md border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-700">
+          Oturum şu anda başlatılamadı. Lütfen durumu kontrol edip tekrar
+          deneyin.
+        </div>
+      ) : null}
 
       <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         {summaryStats.map((stat) => (
@@ -401,41 +483,164 @@ export default async function InstructorSessionDetailPage({
 
       <SectionCard
         title="Son Yoklama Kayıtları"
-        description="Bu adımda yalnızca okuma görünümü bulunur."
+        description="Öğrenci QR okuttuğunda konum sonucu bu listede görünür."
       >
         {session.attendanceRecords.length > 0 ? (
-          <div className="divide-y divide-neutral-100">
-            {session.attendanceRecords.map((record) => (
-              <div
-                key={record.id}
-                className="flex flex-col gap-2 py-3 first:pt-0 last:pb-0 sm:flex-row sm:items-center sm:justify-between"
-              >
-                <div>
-                  <p className="font-medium text-neutral-950">
-                    {record.studentUser.name ?? "İsimsiz öğrenci"}
-                  </p>
-                  <p className="mt-1 text-sm text-neutral-500">
-                    {record.studentUser.email}
-                  </p>
-                </div>
-                <div className="flex flex-wrap items-center gap-3">
-                  <StatusBadge
-                    label={getAttendanceRecordStatusLabel(record.status)}
-                    tone={getAttendanceTone(record.status)}
-                  />
-                  <span className="text-sm text-neutral-500">
-                    {record.checkedInAt
-                      ? formatDateTimeTr(record.checkedInAt)
-                      : "Henüz katılmadı"}
-                  </span>
-                </div>
-              </div>
-            ))}
-          </div>
+          <>
+            <div className="hidden overflow-hidden rounded-lg border border-neutral-200 md:block">
+              <table className="w-full border-collapse text-left text-sm">
+                <thead className="bg-neutral-50 text-xs font-medium uppercase tracking-normal text-neutral-500">
+                  <tr>
+                    <th className="px-4 py-3">Öğrenci</th>
+                    <th className="px-4 py-3">Durum</th>
+                    <th className="px-4 py-3">Yoklama Zamanı</th>
+                    <th className="px-4 py-3">Mesafe</th>
+                    <th className="px-4 py-3">Konum</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-neutral-100 bg-white">
+                  {session.attendanceRecords.map((record) => {
+                    const latestPresenceCheck = record.presenceChecks[0] ?? null;
+
+                    return (
+                      <tr key={record.id}>
+                        <td className="px-4 py-4">
+                          <p className="font-medium text-neutral-950">
+                            {record.studentUser.name ?? "İsimsiz öğrenci"}
+                          </p>
+                          <p className="mt-1 text-xs text-neutral-500">
+                            {record.studentUser.email}
+                          </p>
+                        </td>
+                        <td className="px-4 py-4">
+                          <StatusBadge
+                            label={getAttendanceRecordStatusLabel(record.status)}
+                            tone={getAttendanceTone(record.status)}
+                          />
+                        </td>
+                        <td className="px-4 py-4 text-neutral-600">
+                          {record.checkedInAt
+                            ? formatDateTimeTr(record.checkedInAt)
+                            : "Henüz katılmadı"}
+                        </td>
+                        <td className="px-4 py-4 text-neutral-600">
+                          <p>{formatDecimalMeters(record.distanceMeters)}</p>
+                          <p className="mt-1 text-xs text-neutral-500">
+                            Doğruluk:{" "}
+                            {record.locationAccuracyMeters === null
+                              ? "Belirtilmedi"
+                              : `${record.locationAccuracyMeters} m`}
+                          </p>
+                        </td>
+                        <td className="px-4 py-4 text-neutral-600">
+                          <div className="grid gap-2">
+                            <StatusBadge
+                              label={getLocationVerificationLabel(
+                                latestPresenceCheck?.status,
+                                record.status,
+                              )}
+                              tone={getLocationVerificationTone(
+                                latestPresenceCheck?.status,
+                                record.status,
+                              )}
+                            />
+                            <p className="text-xs leading-5 text-neutral-500">
+                              {formatCoordinates(
+                                record.locationLatitude,
+                                record.locationLongitude,
+                              )}
+                            </p>
+                            {record.rejectionReason ? (
+                              <p className="text-xs leading-5 text-rose-700">
+                                {record.rejectionReason}
+                              </p>
+                            ) : null}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="grid gap-3 md:hidden">
+              {session.attendanceRecords.map((record) => {
+                const latestPresenceCheck = record.presenceChecks[0] ?? null;
+
+                return (
+                  <article
+                    key={record.id}
+                    className="rounded-lg border border-neutral-200 bg-white p-4"
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="font-medium text-neutral-950">
+                          {record.studentUser.name ?? "İsimsiz öğrenci"}
+                        </p>
+                        <p className="mt-1 truncate text-sm text-neutral-500">
+                          {record.studentUser.email}
+                        </p>
+                      </div>
+                      <StatusBadge
+                        label={getAttendanceRecordStatusLabel(record.status)}
+                        tone={getAttendanceTone(record.status)}
+                      />
+                    </div>
+                    <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-2">
+                      <div>
+                        <dt className="text-neutral-500">Yoklama zamanı</dt>
+                        <dd className="mt-1 font-medium text-neutral-900">
+                          {record.checkedInAt
+                            ? formatDateTimeTr(record.checkedInAt)
+                            : "Henüz katılmadı"}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt className="text-neutral-500">Mesafe</dt>
+                        <dd className="mt-1 font-medium text-neutral-900">
+                          {formatDecimalMeters(record.distanceMeters)}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt className="text-neutral-500">Konum sonucu</dt>
+                        <dd className="mt-1">
+                          <StatusBadge
+                            label={getLocationVerificationLabel(
+                              latestPresenceCheck?.status,
+                              record.status,
+                            )}
+                            tone={getLocationVerificationTone(
+                              latestPresenceCheck?.status,
+                              record.status,
+                            )}
+                          />
+                        </dd>
+                      </div>
+                      <div>
+                        <dt className="text-neutral-500">Konum</dt>
+                        <dd className="mt-1 font-medium text-neutral-900">
+                          {formatCoordinates(
+                            record.locationLatitude,
+                            record.locationLongitude,
+                          )}
+                        </dd>
+                      </div>
+                    </dl>
+                    {record.rejectionReason ? (
+                      <p className="mt-3 rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
+                        {record.rejectionReason}
+                      </p>
+                    ) : null}
+                  </article>
+                );
+              })}
+            </div>
+          </>
         ) : (
           <EmptyState
             title="Henüz yoklama kaydı yok"
-            description="Öğrenci yoklama katılım akışı eklendiğinde son kayıtlar burada listelenecek."
+            description="Öğrenci QR kodu okutup konumu doğrulandığında kayıtlar burada listelenecek."
             icon={<ListChecks className="h-5 w-5" aria-hidden="true" />}
           />
         )}

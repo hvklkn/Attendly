@@ -1,5 +1,6 @@
 import "server-only";
 
+import { headers } from "next/headers";
 import { db } from "@/lib/db";
 import { canIssueQrTokenForSessionStatus } from "@/lib/qr-ui";
 import {
@@ -31,6 +32,30 @@ type IssueAttendanceSessionQrTokenInput = {
   organizationId: string;
   instructorMembershipId?: string;
 };
+
+async function getRequestOrigin() {
+  try {
+    const requestHeaders = await headers();
+    const directOrigin = requestHeaders.get("origin");
+
+    if (directOrigin) {
+      return directOrigin;
+    }
+
+    const host =
+      requestHeaders.get("x-forwarded-host") ?? requestHeaders.get("host");
+
+    if (!host) {
+      return undefined;
+    }
+
+    const protocol = requestHeaders.get("x-forwarded-proto") ?? "http";
+
+    return `${protocol}://${host}`;
+  } catch {
+    return undefined;
+  }
+}
 
 export async function issueAttendanceSessionQrToken(
   authContext: AuthContext,
@@ -129,7 +154,7 @@ export async function issueAttendanceSessionQrToken(
       attendanceSessionId: attendanceSession.id,
       tokenId: qrToken.id,
       rawToken,
-      scanUrl: createQrScanUrl(rawToken),
+      scanUrl: createQrScanUrl(rawToken, await getRequestOrigin()),
       expiresAt: qrToken.expiresAt,
       createdAt: qrToken.createdAt,
       revokedPreviousCount: revokedPreviousTokens.count,

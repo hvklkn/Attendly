@@ -4,6 +4,7 @@ import { useActionState, useEffect, useState, type ReactNode } from "react";
 import { useFormStatus } from "react-dom";
 import { useRouter } from "next/navigation";
 import { Copy, KeyRound, QrCode, RefreshCw } from "lucide-react";
+import { QRCodeSVG } from "qrcode.react";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { StatusBadge } from "@/components/ui/StatusBadge";
@@ -214,13 +215,15 @@ export function AdminSessionQrTokenPanel({
           </div>
 
           <div className="grid gap-4 lg:grid-cols-[180px_1fr]">
-            <div className="flex aspect-square items-center justify-center rounded-md border border-dashed border-neutral-300 bg-neutral-50 text-neutral-500">
-              <div className="grid justify-items-center gap-2">
-                <QrCode className="h-14 w-14" aria-hidden="true" />
-                <span className="text-xs font-medium uppercase tracking-normal">
-                  QR alanı
-                </span>
-              </div>
+            <div className="flex aspect-square items-center justify-center rounded-md border border-neutral-200 bg-white p-4 shadow-subtle">
+              <QRCodeSVG
+                value={state.issuedToken.scanUrl}
+                size={320}
+                level="M"
+                marginSize={3}
+                className="h-full w-full"
+                title="Yoklama QR kodu"
+              />
             </div>
 
             <div className="grid min-w-0 gap-4">

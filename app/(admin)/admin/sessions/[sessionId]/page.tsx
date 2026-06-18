@@ -7,6 +7,7 @@ import {
   Clock3,
   ListChecks,
   MapPin,
+  PlayCircle,
   QrCode,
   UserRound,
   Users,
@@ -19,6 +20,7 @@ import { StatCard } from "@/components/ui/StatCard";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { routes } from "@/constants/routes";
 import { requireAdminAuthContext } from "@/lib/admin/auth";
+import { startAdminSessionAction } from "@/lib/admin/session-actions";
 import { getAdminSessionDetailData } from "@/lib/admin/queries";
 import {
   formatDateTimeTr,
@@ -35,6 +37,8 @@ type AdminSessionDetailPageProps = {
   }>;
   searchParams?: Promise<{
     created?: string | string[];
+    started?: string | string[];
+    startError?: string | string[];
   }>;
 };
 
@@ -188,6 +192,14 @@ export default async function AdminSessionDetailPage({
     (Array.isArray(resolvedSearchParams?.created)
       ? resolvedSearchParams?.created[0]
       : resolvedSearchParams?.created) === "1";
+  const started =
+    (Array.isArray(resolvedSearchParams?.started)
+      ? resolvedSearchParams?.started[0]
+      : resolvedSearchParams?.started) === "1";
+  const startError =
+    (Array.isArray(resolvedSearchParams?.startError)
+      ? resolvedSearchParams?.startError[0]
+      : resolvedSearchParams?.startError) === "1";
   const attendanceRate =
     data.attendanceRate === null ? "--" : `${data.attendanceRate}%`;
 
@@ -345,6 +357,18 @@ export default async function AdminSessionDetailPage({
         >
           Geri
         </ButtonLink>
+        {session.status === "DRAFT" || session.status === "SCHEDULED" ? (
+          <form action={startAdminSessionAction}>
+            <input type="hidden" name="sessionId" value={session.id} />
+            <button
+              type="submit"
+              className="inline-flex h-9 items-center justify-center gap-2 rounded-md bg-neutral-950 px-4 text-sm font-medium text-white transition hover:bg-neutral-800"
+            >
+              <PlayCircle className="h-4 w-4" aria-hidden="true" />
+              Oturumu Başlat
+            </button>
+          </form>
+        ) : null}
         <StatusBadge
           label={formatEnum(session.status)}
           tone={getSessionTone(session.status)}
@@ -354,6 +378,19 @@ export default async function AdminSessionDetailPage({
       {created ? (
         <div className="rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-700">
           Yoklama oturumu oluşturuldu.
+        </div>
+      ) : null}
+
+      {started ? (
+        <div className="rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-700">
+          Yoklama oturumu başlatıldı.
+        </div>
+      ) : null}
+
+      {startError ? (
+        <div className="rounded-md border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-700">
+          Oturum şu anda başlatılamadı. Lütfen durumu kontrol edip tekrar
+          deneyin.
         </div>
       ) : null}
 
@@ -522,9 +559,9 @@ export default async function AdminSessionDetailPage({
                   <tr>
                     <th className="px-4 py-3">Öğrenci</th>
                     <th className="px-4 py-3">Durum</th>
-                    <th className="px-4 py-3">Kaynak</th>
-                    <th className="px-4 py-3">Katılım</th>
-                    <th className="px-4 py-3">Doğruluk</th>
+                    <th className="px-4 py-3">Yoklama Zamanı</th>
+                    <th className="px-4 py-3">Mesafe</th>
+                    <th className="px-4 py-3">Konum</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-neutral-100 bg-white">
@@ -545,17 +582,45 @@ export default async function AdminSessionDetailPage({
                         />
                       </td>
                       <td className="px-4 py-4 text-neutral-600">
-                        {formatEnum(record.source)}
-                      </td>
-                      <td className="px-4 py-4 text-neutral-600">
                         {record.checkedInAt
                           ? formatDateTime(record.checkedInAt)
                           : "Henüz katılmadı"}
                       </td>
                       <td className="px-4 py-4 text-neutral-600">
-                        {record.locationAccuracyMeters === null
-                          ? "Belirtilmedi"
-                          : `${record.locationAccuracyMeters} m`}
+                        <p>{formatDecimalMeters(record.distanceMeters)}</p>
+                        <p className="mt-1 text-xs text-neutral-500">
+                          Doğruluk:{" "}
+                          {record.locationAccuracyMeters === null
+                            ? "Belirtilmedi"
+                            : `${record.locationAccuracyMeters} m`}
+                        </p>
+                      </td>
+                      <td className="px-4 py-4 text-neutral-600">
+                        <div className="grid gap-2">
+                          <StatusBadge
+                            label={
+                              record.status === "REJECTED"
+                                ? "Konum dışı"
+                                : "Konum içi"
+                            }
+                            tone={
+                              record.status === "REJECTED"
+                                ? "danger"
+                                : "success"
+                            }
+                          />
+                          <p className="text-xs leading-5 text-neutral-500">
+                            {formatCoordinates(
+                              record.locationLatitude,
+                              record.locationLongitude,
+                            )}
+                          </p>
+                          {record.rejectionReason ? (
+                            <p className="text-xs leading-5 text-rose-700">
+                              {record.rejectionReason}
+                            </p>
+                          ) : null}
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -585,20 +650,42 @@ export default async function AdminSessionDetailPage({
                   </div>
                   <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-2">
                     <div>
-                      <dt className="text-neutral-500">Kaynak</dt>
-                      <dd className="mt-1 font-medium text-neutral-900">
-                        {formatEnum(record.source)}
-                      </dd>
-                    </div>
-                    <div>
-                      <dt className="text-neutral-500">Katılım</dt>
+                      <dt className="text-neutral-500">Yoklama zamanı</dt>
                       <dd className="mt-1 font-medium text-neutral-900">
                         {record.checkedInAt
                           ? formatDateTime(record.checkedInAt)
                           : "Henüz katılmadı"}
                       </dd>
                     </div>
+                    <div>
+                      <dt className="text-neutral-500">Mesafe</dt>
+                      <dd className="mt-1 font-medium text-neutral-900">
+                        {formatDecimalMeters(record.distanceMeters)}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt className="text-neutral-500">Konum sonucu</dt>
+                      <dd className="mt-1 font-medium text-neutral-900">
+                        {record.status === "REJECTED"
+                          ? "Konum dışı"
+                          : "Konum içi"}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt className="text-neutral-500">Konum</dt>
+                      <dd className="mt-1 font-medium text-neutral-900">
+                        {formatCoordinates(
+                          record.locationLatitude,
+                          record.locationLongitude,
+                        )}
+                      </dd>
+                    </div>
                   </dl>
+                  {record.rejectionReason ? (
+                    <p className="mt-3 rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
+                      {record.rejectionReason}
+                    </p>
+                  ) : null}
                 </article>
               ))}
             </div>

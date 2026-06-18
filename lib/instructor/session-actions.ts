@@ -1,9 +1,13 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import { routes } from "@/constants/routes";
 import { requireInstructorAuthContext } from "@/lib/instructor/auth";
-import { issueInstructorSessionQrToken } from "@/lib/instructor/session-mutations";
+import {
+  issueInstructorSessionQrToken,
+  startInstructorAttendanceSession,
+} from "@/lib/instructor/session-mutations";
 import type { IssueQrTokenActionState } from "@/lib/qr-ui";
 
 export async function issueInstructorSessionQrTokenAction(
@@ -49,4 +53,31 @@ export async function issueInstructorSessionQrTokenAction(
       revokedPreviousCount: result.revokedPreviousCount,
     },
   };
+}
+
+export async function startInstructorSessionAction(formData: FormData) {
+  const sessionIdValue = formData.get("sessionId");
+  const sessionId = typeof sessionIdValue === "string" ? sessionIdValue : "";
+  const targetPath = sessionId.trim()
+    ? `/instructor/sessions/${sessionId.trim()}`
+    : routes.instructor.sessions;
+
+  if (!sessionId.trim()) {
+    redirect(`${targetPath}?startError=1`);
+  }
+
+  const authContext = await requireInstructorAuthContext();
+  const result = await startInstructorAttendanceSession(authContext, sessionId);
+
+  if (!result.ok) {
+    redirect(`${targetPath}?startError=1`);
+  }
+
+  revalidatePath(`/instructor/sessions/${result.sessionId}`);
+  revalidatePath(routes.instructor.sessions);
+  revalidatePath(routes.instructor.dashboard);
+  revalidatePath(`/admin/sessions/${result.sessionId}`);
+  revalidatePath(routes.admin.sessions);
+  revalidatePath(routes.admin.dashboard);
+  redirect(`/instructor/sessions/${result.sessionId}?started=1`);
 }

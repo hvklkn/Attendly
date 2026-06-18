@@ -8,6 +8,7 @@ import type { IssueQrTokenActionState } from "@/lib/admin/session-qr";
 import {
   createAdminAttendanceSession,
   issueAdminSessionQrToken,
+  startAdminAttendanceSession,
 } from "@/lib/admin/session-mutations";
 import {
   getCreateSessionFormValues,
@@ -95,4 +96,31 @@ export async function issueAdminSessionQrTokenAction(
       revokedPreviousCount: result.revokedPreviousCount,
     },
   };
+}
+
+export async function startAdminSessionAction(formData: FormData) {
+  const sessionIdValue = formData.get("sessionId");
+  const sessionId = typeof sessionIdValue === "string" ? sessionIdValue : "";
+  const targetPath = sessionId.trim()
+    ? `/admin/sessions/${sessionId.trim()}`
+    : routes.admin.sessions;
+
+  if (!sessionId.trim()) {
+    redirect(`${targetPath}?startError=1`);
+  }
+
+  const authContext = await requireAdminAuthContext();
+  const result = await startAdminAttendanceSession(authContext, sessionId);
+
+  if (!result.ok) {
+    redirect(`${targetPath}?startError=1`);
+  }
+
+  revalidatePath(`/admin/sessions/${result.sessionId}`);
+  revalidatePath(routes.admin.sessions);
+  revalidatePath(routes.admin.dashboard);
+  revalidatePath(`/instructor/sessions/${result.sessionId}`);
+  revalidatePath(routes.instructor.sessions);
+  revalidatePath(routes.instructor.dashboard);
+  redirect(`/admin/sessions/${result.sessionId}?started=1`);
 }

@@ -18,6 +18,9 @@ export type StudentScanSessionDetails = {
   startTime: Date;
   endTime: Date;
   status: AttendanceSessionStatus;
+  geofenceLatitude: { toString: () => string } | null;
+  geofenceLongitude: { toString: () => string } | null;
+  geofenceRadiusMeters: number | null;
   section: {
     name: string;
     code: string | null;
@@ -30,6 +33,8 @@ export type StudentScanSessionDetails = {
     name: string;
     code: string | null;
     address: string | null;
+    latitude: { toString: () => string } | null;
+    longitude: { toString: () => string } | null;
     allowedRadiusMeters: number | null;
   } | null;
 };
@@ -52,7 +57,6 @@ export type StudentScanValidationResult =
     };
 
 const STUDENT_SCANNABLE_SESSION_STATUSES = [
-  AttendanceSessionStatus.SCHEDULED,
   AttendanceSessionStatus.ACTIVE,
 ] as const;
 
@@ -91,6 +95,9 @@ export async function validateStudentScanToken(
             startTime: true,
             endTime: true,
             status: true,
+            geofenceLatitude: true,
+            geofenceLongitude: true,
+            geofenceRadiusMeters: true,
             section: {
               select: {
                 name: true,
@@ -108,6 +115,8 @@ export async function validateStudentScanToken(
                 name: true,
                 code: true,
                 address: true,
+                latitude: true,
+                longitude: true,
                 allowedRadiusMeters: true,
               },
             },
@@ -158,6 +167,9 @@ export async function validateStudentScanToken(
         startTime: qrToken.attendanceSession.startTime,
         endTime: qrToken.attendanceSession.endTime,
         status: qrToken.attendanceSession.status,
+        geofenceLatitude: qrToken.attendanceSession.geofenceLatitude,
+        geofenceLongitude: qrToken.attendanceSession.geofenceLongitude,
+        geofenceRadiusMeters: qrToken.attendanceSession.geofenceRadiusMeters,
         section: qrToken.attendanceSession.section,
         room: qrToken.attendanceSession.room,
       },

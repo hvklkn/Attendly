@@ -30,6 +30,16 @@ export type CreateAdminSessionResult =
 export type IssueAdminSessionQrTokenResult =
   IssueAttendanceSessionQrTokenResult;
 
+export type StartAdminAttendanceSessionResult =
+  | {
+      ok: true;
+      sessionId: string;
+    }
+  | {
+      ok: false;
+      message: string;
+    };
+
 export async function createAdminAttendanceSession(
   authContext: AdminAuthContext,
   input: ValidCreateSessionInput,
@@ -221,4 +231,89 @@ export async function issueAdminSessionQrToken(
     sessionId,
     organizationId,
   });
+}
+
+export async function startAdminAttendanceSession(
+  authContext: AdminAuthContext,
+  sessionId: string,
+): Promise<StartAdminAttendanceSessionResult> {
+  const organizationId = getAdminOrganizationId(authContext);
+  const normalizedSessionId = sessionId.trim();
+
+  if (!normalizedSessionId) {
+    return {
+      ok: false,
+      message: "Başlatmak için geçerli bir yoklama oturumu seçin.",
+    };
+  }
+
+  try {
+    const session = await db.attendanceSession.findFirst({
+      where: {
+        id: normalizedSessionId,
+        organizationId,
+      },
+      select: {
+        id: true,
+        status: true,
+      },
+    });
+
+    if (!session) {
+      return {
+        ok: false,
+        message: "Yoklama oturumu bulunamadı.",
+      };
+    }
+
+    if (session.status === AttendanceSessionStatus.ACTIVE) {
+      return {
+        ok: true,
+        sessionId: session.id,
+      };
+    }
+
+    if (
+      session.status !== AttendanceSessionStatus.DRAFT &&
+      session.status !== AttendanceSessionStatus.SCHEDULED
+    ) {
+      return {
+        ok: false,
+        message: "Bu oturum artık başlatılamaz.",
+      };
+    }
+
+    await db.$transaction([
+      db.attendanceSession.update({
+        where: {
+          id_organizationId: {
+            id: session.id,
+            organizationId,
+          },
+        },
+        data: {
+          status: AttendanceSessionStatus.ACTIVE,
+        },
+      }),
+      db.auditLog.create({
+        data: {
+          organizationId,
+          actorUserId: authContext.user.id,
+          action: "attendance_session.started",
+          targetType: "AttendanceSession",
+          targetId: session.id,
+        },
+      }),
+    ]);
+
+    return {
+      ok: true,
+      sessionId: session.id,
+    };
+  } catch {
+    return {
+      ok: false,
+      message: "Oturum şu anda başlatılamadı. Lütfen tekrar deneyin.",
+    };
+  }
 }

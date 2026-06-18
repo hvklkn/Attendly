@@ -346,6 +346,8 @@ model AttendanceRecord {
   locationLatitude       Decimal?                    @db.Decimal(9, 6)
   locationLongitude      Decimal?                    @db.Decimal(9, 6)
   locationAccuracyMeters Int?
+  distanceMeters         Decimal?                    @db.Decimal(10, 2)
+  rejectionReason        String?
   deviceIdHash           String?
   deviceUserAgent        String?
   ipAddress              String?

@@ -4,6 +4,7 @@ import {
   AttendanceRecordStatus,
   AttendanceSessionStatus,
   EnrollmentStatus,
+  PresenceCheckType,
 } from "@/lib/generated/prisma/enums";
 import {
   getInstructorOrganizationId,
@@ -258,8 +259,28 @@ export async function getInstructorSessionDetailData(
           select: {
             id: true,
             status: true,
+            source: true,
             checkedInAt: true,
             createdAt: true,
+            locationAccuracyMeters: true,
+            locationLatitude: true,
+            locationLongitude: true,
+            distanceMeters: true,
+            rejectionReason: true,
+            presenceChecks: {
+              where: {
+                checkType: PresenceCheckType.INITIAL_CHECK_IN,
+              },
+              orderBy: {
+                checkedAt: "desc",
+              },
+              take: 1,
+              select: {
+                status: true,
+                distanceToGeofenceMeters: true,
+                checkedAt: true,
+              },
+            },
             studentUser: {
               select: {
                 name: true,

@@ -1,6 +1,8 @@
 import "dotenv/config";
 
 import {
+  AttendanceSessionGeofenceSource,
+  AttendanceSessionStatus,
   MembershipRole,
   UserStatus,
   EnrollmentStatus,
@@ -297,11 +299,61 @@ async function main() {
     },
   });
 
+  const demoSessionTitle = "Demo Yoklama Oturumu";
+  const now = new Date();
+  const demoSessionStartTime = new Date(now.getTime() - 10 * 60 * 1000);
+  const demoSessionEndTime = new Date(now.getTime() + 50 * 60 * 1000);
+  const existingDemoSession = await db.attendanceSession.findFirst({
+    where: {
+      organizationId: demoOrganization.id,
+      sectionId: sectionOne.id,
+      title: demoSessionTitle,
+    },
+    select: {
+      id: true,
+    },
+  });
+  const demoSessionDetails = {
+    title: demoSessionTitle,
+    description:
+      "Demo akışı için aktif QR ve konum kontrollü yoklama oturumu.",
+    startTime: demoSessionStartTime,
+    endTime: demoSessionEndTime,
+    status: AttendanceSessionStatus.ACTIVE,
+    lateThresholdMinutes: 15,
+    geofenceLatitude: roomOne.latitude,
+    geofenceLongitude: roomOne.longitude,
+    geofenceAccuracyMeters: 10,
+    geofenceRadiusMeters: roomOne.allowedRadiusMeters,
+    geofenceCapturedAt: now,
+    geofenceSource: AttendanceSessionGeofenceSource.ROOM,
+  };
+  const demoSession = existingDemoSession
+    ? await db.attendanceSession.update({
+        where: {
+          id_organizationId: {
+            id: existingDemoSession.id,
+            organizationId: demoOrganization.id,
+          },
+        },
+        data: demoSessionDetails,
+      })
+    : await db.attendanceSession.create({
+        data: {
+          organizationId: demoOrganization.id,
+          sectionId: sectionOne.id,
+          roomId: roomOne.id,
+          createdByMembershipId: instructorMembership.id,
+          ...demoSessionDetails,
+        },
+      });
+
   console.log("Seeded Attendly development data:");
   console.log(`Organization: ${demoOrganization.name}`);
   console.log(`Courses: ${courseOne.title}, ${courseTwo.title}`);
   console.log(`Rooms: ${roomOne.name}, ${roomTwo.name}`);
   console.log(`Sections: ${sectionOne.name}, ${sectionTwo.name}`);
+  console.log(`Active demo session: ${demoSession.title}`);
   console.log("Seeded development users:");
   for (const seedUser of seedUsers) {
     console.log(`- ${seedUser.email} / ${devPassword}`);

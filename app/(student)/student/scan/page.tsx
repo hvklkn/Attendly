@@ -17,6 +17,7 @@ import { SectionCard } from "@/components/ui/SectionCard";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { routes } from "@/constants/routes";
 import { requireRole } from "@/lib/auth/guards";
+import { resolveAttendanceGeofence } from "@/lib/geofence";
 import {
   formatDateTimeTr,
   getAttendanceSessionStatusLabel,
@@ -28,6 +29,7 @@ import {
 } from "@/lib/student/scan-validation";
 import type { StatusTone } from "@/types/status";
 import { StudentQrScanner } from "./StudentQrScanner";
+import { StudentAttendanceCheckIn } from "./StudentAttendanceCheckIn";
 
 type StudentScanPageProps = {
   searchParams: Promise<{
@@ -152,8 +154,10 @@ function InvalidScanResult({
 
 function ValidScanResult({
   result,
+  rawToken,
 }: {
   result: Extract<StudentScanValidationResult, { status: "valid" }>;
+  rawToken: string;
 }) {
   const { session } = result;
   const courseAndSection = session.section.code
@@ -165,11 +169,14 @@ function ValidScanResult({
       : session.room.name
     : "Atanmadı";
   const location = session.room?.address ?? "Belirtilmedi";
-  const radius =
-    session.room?.allowedRadiusMeters === null ||
-    session.room?.allowedRadiusMeters === undefined
-      ? "Belirtilmedi"
-      : `${session.room.allowedRadiusMeters} metre`;
+  const geofence = resolveAttendanceGeofence({
+    session,
+    room: session.room,
+  });
+  const radius = geofence ? `${geofence.radiusMeters} metre` : "Belirtilmedi";
+  const geofenceCenter = geofence
+    ? `${geofence.latitude.toFixed(6)}, ${geofence.longitude.toFixed(6)}`
+    : "Belirtilmedi";
 
   const sessionItems = [
     { label: "Ders", value: session.section.course.title },
@@ -178,6 +185,7 @@ function ValidScanResult({
     { label: "Bitiş", value: formatDateTime(session.endTime) },
     { label: "Oda", value: room },
     { label: "Konum", value: location },
+    { label: "Yoklama merkezi", value: geofenceCenter },
     { label: "Yarıçap", value: radius },
     { label: "QR bitişi", value: formatDateTime(result.tokenExpiresAt) },
   ];
@@ -216,21 +224,14 @@ function ValidScanResult({
                   />
                 </div>
                 <p className="mt-2 text-sm leading-6 text-emerald-900">
-                  Sonraki adım yoklamaya katılımı tamamlayacak. Bu doğrulama
-                  ekranı henüz yoklama kaydı oluşturmaz.
+                  Yoklamayı tamamlamak için konumunuzu paylaşın. Sistem
+                  konumunuzu oturumun yoklama alanıyla karşılaştıracak.
                 </p>
               </div>
             </div>
           </div>
 
-          <button
-            type="button"
-            disabled
-            className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-md bg-neutral-200 px-4 text-sm font-medium text-neutral-500 sm:w-fit"
-          >
-            <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
-            Yoklamaya Katıl
-          </button>
+          <StudentAttendanceCheckIn token={rawToken} />
         </div>
       </SectionCard>
 
@@ -274,6 +275,7 @@ function ValidScanResult({
                 items={[
                   { label: "Oda", value: room },
                   { label: "Adres", value: location },
+                  { label: "Yoklama merkezi", value: geofenceCenter },
                   { label: "Yarıçap", value: radius },
                 ]}
               />
@@ -352,7 +354,7 @@ export default async function StudentScanPage({
       </div>
 
       {result.status === "valid" ? (
-        <ValidScanResult result={result} />
+        <ValidScanResult result={result} rawToken={rawToken} />
       ) : (
         <InvalidScanResult result={result} />
       )}

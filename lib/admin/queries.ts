@@ -386,6 +386,10 @@ export async function getAdminSessionDetailData(
             checkedInAt: true,
             createdAt: true,
             locationAccuracyMeters: true,
+            locationLatitude: true,
+            locationLongitude: true,
+            distanceMeters: true,
+            rejectionReason: true,
             deviceUserAgent: true,
             studentUser: {
               select: {
