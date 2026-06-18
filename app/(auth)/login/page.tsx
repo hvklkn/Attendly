@@ -4,25 +4,30 @@ import { SectionCard } from "@/components/ui/SectionCard";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { loginAction } from "@/lib/auth/actions";
 import { getCurrentAuthContext } from "@/lib/auth/context";
+import { getSafeInternalPath, isSafeInternalPath } from "@/lib/auth/redirects";
 import { getRoleHomePath } from "@/lib/auth/roles";
 
 type LoginPageProps = {
   searchParams?: Promise<{
     error?: string;
     registered?: string;
+    next?: string;
   }>;
 };
 
 export const dynamic = "force-dynamic";
 
 export default async function LoginPage({ searchParams }: LoginPageProps) {
+  const params = await searchParams;
+  const requestedNext = params?.next?.trim();
+  const next =
+    requestedNext && isSafeInternalPath(requestedNext) ? requestedNext : "";
   const authContext = await getCurrentAuthContext();
 
   if (authContext) {
-    redirect(getRoleHomePath(authContext.role));
+    redirect(getSafeInternalPath(next, getRoleHomePath(authContext.role)));
   }
 
-  const params = await searchParams;
   const hasError = params?.error === "invalid";
   const hasRegistered = params?.registered === "1";
 
@@ -47,6 +52,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
           </div>
         ) : null}
         <form action={loginAction} className="mt-8 space-y-5">
+          <input type="hidden" name="next" value={next} />
           <div>
             <label
               htmlFor="email"

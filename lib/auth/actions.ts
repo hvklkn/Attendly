@@ -3,6 +3,7 @@
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { loginWithPassword } from "@/lib/auth/login";
+import { getSafeInternalPath, isSafeInternalPath } from "@/lib/auth/redirects";
 import { getRoleHomePath } from "@/lib/auth/roles";
 import { setSessionCookie } from "@/lib/auth/session";
 
@@ -13,6 +14,7 @@ function getClientIp(headerValue: string | null) {
 export async function loginAction(formData: FormData) {
   const email = String(formData.get("email") ?? "");
   const password = String(formData.get("password") ?? "");
+  const next = String(formData.get("next") ?? "");
   const headerStore = await headers();
 
   const result = await loginWithPassword({
@@ -25,9 +27,17 @@ export async function loginAction(formData: FormData) {
   });
 
   if (!result.ok) {
-    redirect("/login?error=invalid");
+    const searchParams = new URLSearchParams({
+      error: "invalid",
+    });
+
+    if (isSafeInternalPath(next)) {
+      searchParams.set("next", next.trim());
+    }
+
+    redirect(`/login?${searchParams.toString()}`);
   }
 
   await setSessionCookie(result.token);
-  redirect(getRoleHomePath(result.role));
+  redirect(getSafeInternalPath(next, getRoleHomePath(result.role)));
 }

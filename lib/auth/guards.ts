@@ -1,16 +1,29 @@
 import "server-only";
 
+import { headers } from "next/headers";
 import { redirect } from "next/navigation";
-import { routes } from "@/constants/routes";
 import { getCurrentAuthContext } from "@/lib/auth/context";
+import { createLoginPathWithNext } from "@/lib/auth/redirects";
 import { getRoleHomePath, hasAnyRole } from "@/lib/auth/roles";
 import type { MembershipRole } from "@/lib/generated/prisma/enums";
+
+const CURRENT_PATH_HEADER = "x-attendly-current-path";
+
+async function getCurrentRequestPath() {
+  try {
+    const headerStore = await headers();
+
+    return headerStore.get(CURRENT_PATH_HEADER);
+  } catch {
+    return null;
+  }
+}
 
 export async function requireAuth() {
   const authContext = await getCurrentAuthContext();
 
   if (!authContext) {
-    redirect(routes.public.login);
+    redirect(createLoginPathWithNext(await getCurrentRequestPath()));
   }
 
   return authContext;
