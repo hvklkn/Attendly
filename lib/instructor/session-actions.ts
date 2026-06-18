@@ -5,9 +5,15 @@ import { redirect } from "next/navigation";
 import { routes } from "@/constants/routes";
 import { requireInstructorAuthContext } from "@/lib/instructor/auth";
 import {
+  createInstructorAttendanceSession,
   issueInstructorSessionQrToken,
   startInstructorAttendanceSession,
 } from "@/lib/instructor/session-mutations";
+import {
+  getInstructorCreateSessionFormValues,
+  validateInstructorCreateSessionFormValues,
+  type InstructorCreateSessionActionState,
+} from "@/lib/instructor/session-create";
 import type { IssueQrTokenActionState } from "@/lib/qr-ui";
 
 export async function issueInstructorSessionQrTokenAction(
@@ -53,6 +59,43 @@ export async function issueInstructorSessionQrTokenAction(
       revokedPreviousCount: result.revokedPreviousCount,
     },
   };
+}
+
+export async function createInstructorAttendanceSessionAction(
+  _previousState: InstructorCreateSessionActionState,
+  formData: FormData,
+): Promise<InstructorCreateSessionActionState> {
+  const values = getInstructorCreateSessionFormValues(formData);
+  const validation = validateInstructorCreateSessionFormValues(values);
+
+  if (!validation.ok) {
+    return {
+      status: "error",
+      message: "Lütfen formdaki alanları kontrol edin.",
+      values,
+      errors: validation.errors,
+    };
+  }
+
+  const authContext = await requireInstructorAuthContext();
+  const result = await createInstructorAttendanceSession(
+    authContext,
+    validation.data,
+  );
+
+  if (!result.ok) {
+    return {
+      status: "error",
+      message: result.message,
+      values,
+      errors: result.errors ?? {},
+    };
+  }
+
+  revalidatePath(routes.instructor.sessions);
+  revalidatePath(routes.instructor.dashboard);
+  revalidatePath(`/instructor/sessions/${result.sessionId}`);
+  redirect(`/instructor/sessions/${result.sessionId}`);
 }
 
 export async function startInstructorSessionAction(formData: FormData) {

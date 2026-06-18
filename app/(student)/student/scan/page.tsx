@@ -1,5 +1,4 @@
 import type { ReactNode } from "react";
-import Link from "next/link";
 import {
   AlertTriangle,
   Ban,
@@ -15,7 +14,6 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { StatusBadge } from "@/components/ui/StatusBadge";
-import { routes } from "@/constants/routes";
 import { requireRole } from "@/lib/auth/guards";
 import { resolveAttendanceGeofence } from "@/lib/geofence";
 import {
@@ -294,21 +292,6 @@ function ValidScanResult({
   );
 }
 
-function CameraScannerNote() {
-  return (
-    <div className="rounded-lg border border-sky-200 bg-sky-50 p-4 text-sm leading-6 text-sky-900">
-      Kamerayla okutma için{" "}
-      <Link
-        href={routes.student.scan}
-        className="font-semibold text-sky-950 underline-offset-4 hover:underline"
-      >
-        QR Okut sayfasını
-      </Link>{" "}
-      kullanın.
-    </div>
-  );
-}
-
 export default async function StudentScanPage({
   searchParams,
 }: StudentScanPageProps) {
@@ -324,7 +307,7 @@ export default async function StudentScanPage({
         <PageHeader
           eyebrow={authContext.activeOrganization.name}
           title="QR Okut"
-          description="Yoklamaya katılmak için öğretmeninizin ekrandaki QR kodunu kameranızla okutun."
+          description="QR kodu telefonunuzun kamera uygulamasıyla okutun veya eğitmeninizden yoklama bağlantısını isteyin."
         >
           <StatusBadge label="Tarayıcı" tone="info" />
         </PageHeader>
@@ -348,10 +331,6 @@ export default async function StudentScanPage({
           tone={result.status === "valid" ? "success" : "neutral"}
         />
       </PageHeader>
-
-      <div className="mb-6">
-        <CameraScannerNote />
-      </div>
 
       {result.status === "valid" ? (
         <ValidScanResult result={result} rawToken={rawToken} />

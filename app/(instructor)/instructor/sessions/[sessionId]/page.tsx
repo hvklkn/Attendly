@@ -24,7 +24,6 @@ import { getInstructorSessionDetailData } from "@/lib/instructor/queries";
 import {
   formatDateTimeTr,
   getAttendanceRecordStatusLabel,
-  getAttendanceSessionGeofenceSourceLabel,
   getAttendanceSessionStatusLabel,
   getPresenceCheckStatusLabel,
 } from "@/lib/localization";
@@ -140,6 +139,30 @@ function getLocationVerificationTone(
   return recordStatus === "REJECTED" ? "danger" : "success";
 }
 
+function getGeofenceDisplaySource(source: string, hasSessionGeofence: boolean) {
+  if (!hasSessionGeofence || source === "ROOM") {
+    return "Oda konumu";
+  }
+
+  return "Oturum konumu";
+}
+
+function getGeofenceDescription(source: string, hasSessionGeofence: boolean) {
+  if (!hasSessionGeofence) {
+    return "Bu oturumda kayıtlı geofence yok; oda konumu kullanılacak.";
+  }
+
+  if (source === "DEVICE") {
+    return "Bu oturum eğitmen konumu ile oluşturuldu.";
+  }
+
+  if (source === "ROOM") {
+    return "Bu oturum oda konumu ile oluşturuldu.";
+  }
+
+  return "Bu oturum için kaydedilmiş konum kullanılacak.";
+}
+
 function DetailList({
   items,
 }: {
@@ -231,38 +254,68 @@ export default async function InstructorSessionDetailPage({
         },
       ]
     : [];
-  const hasGeofence =
+  const hasSessionGeofence =
     session.geofenceLatitude !== null &&
     session.geofenceLongitude !== null &&
     session.geofenceRadiusMeters !== null;
-  const geofenceItems = hasGeofence
+  const hasRoomGeofence =
+    session.room?.latitude !== null &&
+    session.room?.latitude !== undefined &&
+    session.room.longitude !== null &&
+    session.room.longitude !== undefined &&
+    session.room.allowedRadiusMeters !== null;
+  const displayedGeofence = hasSessionGeofence
+    ? {
+        latitude: session.geofenceLatitude,
+        longitude: session.geofenceLongitude,
+        radiusMeters: session.geofenceRadiusMeters,
+        accuracyMeters: session.geofenceAccuracyMeters,
+        capturedAt: session.geofenceCapturedAt,
+        source: getGeofenceDisplaySource(session.geofenceSource, true),
+        description: getGeofenceDescription(session.geofenceSource, true),
+      }
+    : hasRoomGeofence && session.room
+      ? {
+          latitude: session.room.latitude,
+          longitude: session.room.longitude,
+          radiusMeters: session.room.allowedRadiusMeters,
+          accuracyMeters: null,
+          capturedAt: null,
+          source: getGeofenceDisplaySource(session.geofenceSource, false),
+          description: getGeofenceDescription(session.geofenceSource, false),
+        }
+      : null;
+  const geofenceItems = displayedGeofence
     ? [
         { label: "Yoklama Alanı", value: "Tanımlı" },
         {
-          label: "Merkez Konum",
-          value: formatCoordinates(
-            session.geofenceLatitude,
-            session.geofenceLongitude,
-          ),
+          label: "Kaynak",
+          value: displayedGeofence.source,
         },
         {
-          label: "Yarıçap",
-          value: formatMeters(session.geofenceRadiusMeters),
+          label: "Latitude",
+          value: displayedGeofence.latitude?.toString() ?? "Belirtilmedi",
         },
         {
-          label: "Konum Kaynağı",
-          value: getAttendanceSessionGeofenceSourceLabel(
-            session.geofenceSource,
-          ),
+          label: "Longitude",
+          value: displayedGeofence.longitude?.toString() ?? "Belirtilmedi",
+        },
+        {
+          label: "Radius",
+          value: formatMeters(displayedGeofence.radiusMeters),
+        },
+        {
+          label: "Açıklama",
+          value: displayedGeofence.description,
         },
         {
           label: "Konum Doğruluğu",
-          value: formatDecimalMeters(session.geofenceAccuracyMeters),
+          value: formatDecimalMeters(displayedGeofence.accuracyMeters),
         },
         {
           label: "Konum Alındı",
-          value: session.geofenceCapturedAt
-            ? formatDateTimeTr(session.geofenceCapturedAt)
+          value: displayedGeofence.capturedAt
+            ? formatDateTimeTr(displayedGeofence.capturedAt)
             : "Belirtilmedi",
         },
       ]
@@ -414,7 +467,7 @@ export default async function InstructorSessionDetailPage({
               </div>
             }
           >
-            {hasGeofence ? (
+            {displayedGeofence ? (
               <DetailList items={geofenceItems} />
             ) : (
               <EmptyState

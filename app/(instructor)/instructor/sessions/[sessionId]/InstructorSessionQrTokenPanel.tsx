@@ -87,7 +87,9 @@ function CopyButton({ value }: { value: string }) {
     };
   }, []);
 
-  async function handleCopy() {
+  async function handleCopy(event: React.MouseEvent<HTMLButtonElement>) {
+    event.stopPropagation();
+
     try {
       await navigator.clipboard.writeText(value);
       setCopied(true);
@@ -104,10 +106,10 @@ function CopyButton({ value }: { value: string }) {
     <button
       type="button"
       onClick={handleCopy}
-      className="inline-flex h-8 items-center justify-center gap-2 rounded-md border border-neutral-300 bg-white px-3 text-xs font-medium text-neutral-700 transition hover:border-neutral-400 hover:text-neutral-950"
+      className="inline-flex h-10 w-fit items-center justify-center gap-2 rounded-md border border-neutral-950 bg-white px-4 text-sm font-semibold text-neutral-950 transition hover:bg-neutral-100"
     >
-      <Copy className="h-3.5 w-3.5" aria-hidden="true" />
-      {copied ? "Kopyalandı" : "Bağlantıyı Kopyala"}
+      <Copy className="h-4 w-4" aria-hidden="true" />
+      {copied ? "Kopyalandı" : "Yoklama bağlantısını kopyala"}
     </button>
   );
 }
@@ -218,6 +220,15 @@ function QrVisualCard({
           <Maximize2 className="h-4 w-4" aria-hidden="true" />
           Büyüt
         </button>
+
+        {token ? (
+          <div className="grid gap-2">
+            <CopyButton value={token.scanUrl} />
+            <code className="block break-all rounded-md bg-neutral-100 px-3 py-2 text-xs leading-5 text-neutral-900">
+              {token.scanUrl}
+            </code>
+          </div>
+        ) : null}
       </div>
     </div>
   );
@@ -627,7 +638,7 @@ export function InstructorSessionQrTokenPanel({
             <div>
               <div className="mb-2 flex items-center justify-between gap-3">
                 <p className="text-sm font-medium text-neutral-700">
-                  Okutma Bağlantısı
+                  Yoklama Bağlantısı
                 </p>
                 <CopyButton value={state.issuedToken.scanUrl} />
               </div>

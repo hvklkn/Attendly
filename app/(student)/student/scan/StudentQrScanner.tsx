@@ -5,38 +5,25 @@ import { useRouter } from "next/navigation";
 import {
   AlertTriangle,
   Camera,
-  CheckCircle2,
-  MapPin,
   QrCode,
   RefreshCw,
-  ShieldCheck,
 } from "lucide-react";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { routes } from "@/constants/routes";
-import { cn } from "@/lib/utils";
 
 type ScannerPhase =
   | "idle"
-  | "locating"
-  | "location_ready"
   | "opening_camera"
   | "scanning"
   | "scanned"
   | "error";
 
-type CapturedLocation = {
-  latitude: number;
-  longitude: number;
-  accuracy: number | null;
-};
-
 type Html5QrcodeInstance = import("html5-qrcode").Html5Qrcode;
 
 const SCANNER_REGION_ID = "student-qr-camera-region";
-const LOCATION_ERROR_MESSAGE =
-  "Konum izni verilmeden QR okutma başlatılamaz.";
-const CAMERA_ERROR_MESSAGE = "Kamera izni verilmedi";
+const CAMERA_ERROR_MESSAGE =
+  "Kamera izni alınamadı. QR kodu telefonunuzun kamera uygulamasıyla okutabilir veya eğitmenden yoklama bağlantısını isteyebilirsiniz.";
 const INVALID_QR_MESSAGE =
   "QR kodu geçerli bir yoklama bağlantısı içermiyor.";
 const TOKEN_MIN_LENGTH = 20;
@@ -89,14 +76,6 @@ function extractTokenFromQrPayload(payload: string) {
 }
 
 function getStatusLabel(phase: ScannerPhase, errorMessage: string | null) {
-  if (phase === "locating") {
-    return "Konum alınıyor...";
-  }
-
-  if (phase === "location_ready") {
-    return "Konum alındı";
-  }
-
   if (phase === "opening_camera") {
     return "Kamera açılıyor...";
   }
@@ -118,10 +97,10 @@ function getStatusLabel(phase: ScannerPhase, errorMessage: string | null) {
 
 function getStatusTone(phase: ScannerPhase, errorMessage: string | null) {
   if (phase === "error") {
-    return errorMessage === CAMERA_ERROR_MESSAGE ? "danger" : "warning";
+    return errorMessage === CAMERA_ERROR_MESSAGE ? "warning" : "danger";
   }
 
-  if (phase === "location_ready" || phase === "scanned") {
+  if (phase === "scanned") {
     return "success";
   }
 
@@ -132,14 +111,6 @@ function getStatusTone(phase: ScannerPhase, errorMessage: string | null) {
   return "neutral";
 }
 
-function getLocationAccuracyLabel(location: CapturedLocation) {
-  if (location.accuracy === null) {
-    return "Konum alındı";
-  }
-
-  return `Konum alındı - yaklaşık ${Math.round(location.accuracy)} m`;
-}
-
 export function StudentQrScanner() {
   const router = useRouter();
   const isMountedRef = useRef(true);
@@ -148,8 +119,6 @@ export function StudentQrScanner() {
   const hasHandledScanRef = useRef(false);
   const [phase, setPhase] = useState<ScannerPhase>("idle");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [capturedLocation, setCapturedLocation] =
-    useState<CapturedLocation | null>(null);
 
   const stopScanner = useCallback(async () => {
     const scanner = scannerRef.current;
@@ -209,6 +178,8 @@ export function StudentQrScanner() {
       return;
     }
 
+    await stopScanner();
+    hasHandledScanRef.current = false;
     isStartingScannerRef.current = true;
     setPhase("opening_camera");
     setErrorMessage(null);
@@ -266,57 +237,6 @@ export function StudentQrScanner() {
     }
   }, [handleDecodedText, stopScanner]);
 
-  const requestLocation = useCallback(async () => {
-    await stopScanner();
-    hasHandledScanRef.current = false;
-    setCapturedLocation(null);
-    setErrorMessage(null);
-
-    if (!("geolocation" in navigator)) {
-      setPhase("error");
-      setErrorMessage(LOCATION_ERROR_MESSAGE);
-      return;
-    }
-
-    setPhase("locating");
-
-    navigator.geolocation.getCurrentPosition(
-      (position) => {
-        if (!isMountedRef.current) {
-          return;
-        }
-
-        setCapturedLocation({
-          latitude: position.coords.latitude,
-          longitude: position.coords.longitude,
-          accuracy: Number.isFinite(position.coords.accuracy)
-            ? position.coords.accuracy
-            : null,
-        });
-        setPhase("location_ready");
-      },
-      () => {
-        if (!isMountedRef.current) {
-          return;
-        }
-
-        setPhase("error");
-        setErrorMessage(LOCATION_ERROR_MESSAGE);
-      },
-      {
-        enableHighAccuracy: true,
-        maximumAge: 0,
-        timeout: 10000,
-      },
-    );
-  }, [stopScanner]);
-
-  useEffect(() => {
-    if (phase === "location_ready" && capturedLocation) {
-      void startScanner();
-    }
-  }, [capturedLocation, phase, startScanner]);
-
   useEffect(() => {
     isMountedRef.current = true;
 
@@ -328,56 +248,26 @@ export function StudentQrScanner() {
 
   const statusLabel = getStatusLabel(phase, errorMessage);
   const statusTone = getStatusTone(phase, errorMessage);
-  const isBusy =
-    phase === "locating" ||
-    phase === "location_ready" ||
-    phase === "opening_camera";
-  const hasCameraArea = Boolean(capturedLocation);
+  const isBusy = phase === "opening_camera" || phase === "scanning";
+  const hasCameraArea = phase === "opening_camera" || phase === "scanning";
 
   return (
     <div className="grid gap-6">
       <SectionCard
-        title="QR Okutma"
-        description="Öğretmeninizin sınıf ekranında gösterdiği QR kodu telefon kameranızla okutun."
+        title="QR ile Yoklamaya Katıl"
+        description="QR kodu telefonunuzun kamera uygulamasıyla okutun veya eğitmeninizden yoklama bağlantısını isteyin."
         actions={<StatusBadge label={statusLabel} tone={statusTone} />}
       >
         <div className="grid gap-5">
           <div className="flex items-start gap-3 rounded-lg border border-sky-200 bg-sky-50 p-4 text-sm leading-6 text-sky-900">
-            <ShieldCheck
+            <QrCode
               className="mt-0.5 h-5 w-5 shrink-0 text-sky-700"
               aria-hidden="true"
             />
             <p>
-              Konum bilginiz yalnızca yoklama alanında olup olmadığınızı
-              doğrulamak için kullanılır. Ders dışı takip yapılmaz.
+              QR kodu telefonunuzun kamera uygulamasıyla okutun veya
+              eğitmeninizden yoklama bağlantısını isteyin.
             </p>
-          </div>
-
-          <div className="grid gap-4 rounded-lg border border-neutral-200 bg-neutral-50 p-4 sm:grid-cols-[auto_1fr] sm:items-center">
-            <div
-              className={cn(
-                "flex h-11 w-11 items-center justify-center rounded-md bg-white shadow-subtle",
-                capturedLocation ? "text-emerald-700" : "text-neutral-500",
-              )}
-            >
-              {capturedLocation ? (
-                <CheckCircle2 className="h-5 w-5" aria-hidden="true" />
-              ) : (
-                <MapPin className="h-5 w-5" aria-hidden="true" />
-              )}
-            </div>
-            <div className="min-w-0">
-              <h3 className="text-sm font-semibold text-neutral-950">
-                {capturedLocation
-                  ? getLocationAccuracyLabel(capturedLocation)
-                  : phase === "locating"
-                    ? "Konum alınıyor..."
-                    : "Konum izni gerekiyor"}
-              </h3>
-              <p className="mt-1 text-sm leading-6 text-neutral-600">
-                Kamera, konum başarıyla alındıktan sonra açılır.
-              </p>
-            </div>
           </div>
 
           {hasCameraArea ? (
@@ -386,9 +276,7 @@ export function StudentQrScanner() {
                 <Camera className="h-4 w-4" aria-hidden="true" />
                 {phase === "opening_camera"
                   ? "Kamera açılıyor..."
-                  : phase === "scanned"
-                    ? "QR kodu okundu"
-                    : "QR kodu kameraya gösterin"}
+                  : "QR kodu kameraya gösterin"}
               </div>
               <div className="relative overflow-hidden rounded-lg border border-neutral-900 bg-neutral-950 shadow-subtle">
                 <div
@@ -409,8 +297,9 @@ export function StudentQrScanner() {
                 QR kodu okutmaya hazır
               </h3>
               <p className="mt-2 max-w-xl text-sm leading-6 text-neutral-600">
-                Önce konum izni istenir. Konum alınamazsa kamera açılmaz ve
-                yoklama okutma başlatılmaz.
+                Uygulama içinden okutmayı yalnızca ihtiyaç duyarsanız açın.
+                Kamera izni verilmezse telefonunuzun kamera uygulamasıyla
+                okutmaya devam edebilirsiniz.
               </p>
             </div>
           )}
@@ -428,7 +317,7 @@ export function StudentQrScanner() {
           <button
             type="button"
             onClick={() => {
-              void requestLocation();
+              void startScanner();
             }}
             disabled={isBusy || phase === "scanned"}
             className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-md bg-neutral-950 px-5 text-sm font-semibold text-white transition hover:bg-neutral-800 disabled:cursor-not-allowed disabled:bg-neutral-300 disabled:text-neutral-500 sm:w-fit"
@@ -438,7 +327,7 @@ export function StudentQrScanner() {
             ) : (
               <QrCode className="h-4 w-4" aria-hidden="true" />
             )}
-            {phase === "error" ? "Tekrar Dene" : "QR Okutmaya Başla"}
+            {phase === "error" ? "Tekrar Dene" : "Uygulama içinden QR okut"}
           </button>
         </div>
       </SectionCard>

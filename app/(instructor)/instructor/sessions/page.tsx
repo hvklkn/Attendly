@@ -1,4 +1,4 @@
-import { CalendarDays, Search } from "lucide-react";
+import { CalendarDays, Plus, Search } from "lucide-react";
 import { ButtonLink } from "@/components/ui/ButtonLink";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { PageHeader } from "@/components/ui/PageHeader";
@@ -47,7 +47,14 @@ export default async function InstructorSessionsPage({
         eyebrow={authContext.activeOrganization.name}
         title="Yoklama Oturumları"
         description="Size atanmış şubelerdeki yoklama oturumlarını yönetin."
-      />
+      >
+        <ButtonLink
+          href={routes.instructor.sessionCreate}
+          icon={<Plus className="h-4 w-4" aria-hidden="true" />}
+        >
+          Yeni Yoklama Oluştur
+        </ButtonLink>
+      </PageHeader>
 
       <SectionCard
         title="Oturumlarım"

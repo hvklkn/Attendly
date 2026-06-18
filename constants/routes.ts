@@ -26,6 +26,7 @@ export const routes = {
     root: "/instructor",
     dashboard: "/instructor/dashboard",
     sessions: "/instructor/sessions",
+    sessionCreate: "/instructor/sessions/new",
     sessionDetail: "/instructor/sessions/session-id",
     students: "/instructor/students",
     studentCreate: "/instructor/students/new",

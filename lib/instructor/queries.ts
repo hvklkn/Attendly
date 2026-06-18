@@ -11,6 +11,7 @@ import {
   type InstructorAuthContext,
 } from "@/lib/instructor/auth";
 import { db } from "@/lib/db";
+import type { InstructorSessionCreateOptionsData } from "@/lib/instructor/session-create";
 
 const INSTRUCTOR_ACTIVE_SESSION_STATUSES = [
   AttendanceSessionStatus.DRAFT,
@@ -179,6 +180,82 @@ export async function getInstructorSessionsData(
   });
 }
 
+export async function getInstructorSessionCreateOptionsData(
+  authContext: InstructorAuthContext,
+): Promise<InstructorSessionCreateOptionsData> {
+  const organizationId = getInstructorOrganizationId(authContext);
+
+  const [sections, rooms] = await Promise.all([
+    db.section.findMany({
+      where: {
+        organizationId,
+        instructorMembershipId: authContext.membership.id,
+        isActive: true,
+      },
+      orderBy: [
+        {
+          courseId: "asc",
+        },
+        {
+          name: "asc",
+        },
+      ],
+      select: {
+        id: true,
+        name: true,
+        code: true,
+        course: {
+          select: {
+            code: true,
+            title: true,
+          },
+        },
+        _count: {
+          select: {
+            enrollments: {
+              where: {
+                status: EnrollmentStatus.ACTIVE,
+              },
+            },
+          },
+        },
+      },
+    }),
+    db.room.findMany({
+      where: {
+        organizationId,
+        isActive: true,
+      },
+      orderBy: [
+        {
+          code: "asc",
+        },
+        {
+          name: "asc",
+        },
+      ],
+      select: {
+        id: true,
+        name: true,
+        code: true,
+        address: true,
+        latitude: true,
+        longitude: true,
+        allowedRadiusMeters: true,
+      },
+    }),
+  ]);
+
+  return {
+    sections,
+    rooms: rooms.map((room) => ({
+      ...room,
+      latitude: room.latitude?.toString() ?? null,
+      longitude: room.longitude?.toString() ?? null,
+    })),
+  };
+}
+
 export async function getInstructorSessionDetailData(
   authContext: InstructorAuthContext,
   sessionId: string,
@@ -230,6 +307,8 @@ export async function getInstructorSessionDetailData(
             code: true,
             description: true,
             address: true,
+            latitude: true,
+            longitude: true,
             allowedRadiusMeters: true,
             isActive: true,
           },
