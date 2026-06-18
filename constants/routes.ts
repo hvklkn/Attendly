@@ -30,6 +30,7 @@ export const routes = {
     sessions: "/instructor/sessions",
     sessionCreate: "/instructor/sessions/new",
     sessionDetail: "/instructor/sessions/session-id",
+    reports: "/instructor/reports",
     students: "/instructor/students",
     studentCreate: "/instructor/students/new",
   },

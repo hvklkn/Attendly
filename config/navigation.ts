@@ -95,6 +95,12 @@ export const instructorNavigation: RoleNavigation = {
       description: "Ders grubu kayıtları",
       icon: "users",
     },
+    {
+      title: "Raporlar",
+      href: routes.instructor.reports,
+      description: "Ders ve şube devam raporları",
+      icon: "reports",
+    },
   ],
 };
 

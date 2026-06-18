@@ -86,7 +86,7 @@ const quickActions = [
   {
     title: "Raporlar",
     description: "Session detayındaki rapor ve CSV export ekranını açın.",
-    href: routes.instructor.sessions,
+    href: routes.instructor.reports,
     icon: <FileBarChart className="h-4 w-4" aria-hidden="true" />,
   },
 ];
