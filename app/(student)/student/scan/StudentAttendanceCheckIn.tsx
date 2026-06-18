@@ -57,8 +57,7 @@ export function StudentAttendanceCheckIn({
       });
 
       router.push(result.resultUrl);
-    } catch (error) {
-      console.error("Student check-in failed", error);
+    } catch {
       setPhase("error");
       setMessage(
         "Konumunuz alınamadı. Lütfen konum izni verip tekrar deneyin.",

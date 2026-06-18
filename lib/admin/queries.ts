@@ -25,6 +25,8 @@ export async function getAdminDashboardData(authContext: AdminAuthContext) {
     totalCourses,
     totalSessions,
     totalSections,
+    totalRooms,
+    totalUsers,
     totalInstructors,
     totalStudents,
     upcomingSessionsCount,
@@ -46,6 +48,16 @@ export async function getAdminDashboardData(authContext: AdminAuthContext) {
       },
     }),
     db.section.count({
+      where: {
+        organizationId,
+      },
+    }),
+    db.room.count({
+      where: {
+        organizationId,
+      },
+    }),
+    db.membership.count({
       where: {
         organizationId,
       },
@@ -154,6 +166,8 @@ export async function getAdminDashboardData(authContext: AdminAuthContext) {
     totalCourses,
     totalSessions,
     totalSections,
+    totalRooms,
+    totalUsers,
     totalInstructors,
     totalStudents,
     upcomingSessionsCount,

@@ -49,8 +49,8 @@ export default function LandingPage() {
         />
         <StatCard
           label="İş Akışı"
-          value="0"
-          description="Güvenli adımlarla geliştirilen yoklama kuralları."
+          value="Canlı"
+          description="QR, konum doğrulama ve güvenlik uyarıları."
         />
       </section>
 
@@ -83,7 +83,7 @@ export default function LandingPage() {
         <SectionCard title="Mevcut Kapsam">
           <EmptyState
             title="Temel akış hazır"
-            description="Oturum, QR üretimi ve öğrenci doğrulama temeli hazır. Yoklama kaydı, kamera ve konum doğrulaması sonraki adımlarda eklenecek."
+            description="Oturum oluşturma, QR üretimi, öğrenci check-in, konum doğrulama, rapor ve CSV export akışı hazır."
           />
         </SectionCard>
       </section>

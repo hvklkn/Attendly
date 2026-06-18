@@ -6,18 +6,19 @@ export default function TermsPage() {
     <div className="mx-auto flex max-w-4xl flex-col gap-8 px-4 py-12 sm:px-6 lg:px-8">
       <PageHeader
         title="Koşullar"
-        description="Attendly hizmet koşulları ve kabul edilebilir kullanım bilgileri için hazırlık sayfası."
+        description="Attendly demo kullanımında geçerli temel sorumluluklar."
       />
-      <SectionCard title="Hizmet Koşulları Hazırlığı">
+      <SectionCard title="Hizmet Koşulları Özeti">
         <div className="space-y-4 text-sm leading-7 text-neutral-600">
           <p>
-            Attendly, çalışma alanı sahipliği, kabul edilebilir kullanım, hesap
-            sorumlulukları ve hizmet sınırlarını üretim kullanımı öncesinde
-            tanımlayacak.
+            Attendly çalışma alanlarında kullanıcılar yalnızca kendi kurumları
+            ve rolleri kapsamında yetkili oldukları ekranlara erişebilir.
+            Yoklama verileri ders, şube ve oturum bağlamında tutulur.
           </p>
           <p>
-            Bu sayfa, herkese açık rota yapısı tamamlanmış olsun ve incelenmiş
-            metinlerle kolayca değiştirilebilsin diye hazırlanmıştır.
+            QR bağlantıları, konum doğrulaması ve güvenlik uyarıları demo
+            amacıyla hazırlanmıştır. Canlı kullanımda kurum politikaları ve
+            yerel mevzuat gereksinimleri ayrıca değerlendirilmelidir.
           </p>
         </div>
       </SectionCard>

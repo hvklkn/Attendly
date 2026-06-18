@@ -86,9 +86,11 @@ function formatRoomLabel(
 ) {
   const code = room.code ? `${room.code} - ` : "";
   const radius = room.allowedRadiusMeters
-    ? ` - ${room.allowedRadiusMeters} m`
-    : "";
-  const coordinates = hasRoomCoordinates(room) ? " - koordinat var" : "";
+    ? ` · radius ${room.allowedRadiusMeters} m`
+    : " · radius yok";
+  const coordinates = hasRoomCoordinates(room)
+    ? ` · ${room.latitude}, ${room.longitude}`
+    : " · koordinat yok";
 
   return `${code}${room.name}${radius}${coordinates}`;
 }
@@ -275,7 +277,7 @@ export function InstructorCreateSessionForm({
           <div className="grid gap-5">
             <Field
               id="section-id"
-              label="Section"
+              label="Şube"
               error={getFieldError(errors, "sectionId")}
             >
               <select
@@ -307,6 +309,18 @@ export function InstructorCreateSessionForm({
               <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
                 Bu şubede aktif öğrenci bulunmuyor.
               </p>
+            ) : null}
+
+            {selectedSection ? (
+              <div className="rounded-md border border-neutral-200 bg-neutral-50 px-3 py-2 text-sm leading-6 text-neutral-600">
+                <p className="font-medium text-neutral-900">
+                  {selectedSection.course.code} ·{" "}
+                  {selectedSection.code ?? selectedSection.name}
+                </p>
+                <p>
+                  Aktif öğrenci sayısı: {selectedSection._count.enrollments}
+                </p>
+              </div>
             ) : null}
 
             <div className="grid gap-5 md:grid-cols-2">
@@ -383,7 +397,7 @@ export function InstructorCreateSessionForm({
 
             <Field
               id="room-id"
-              label="Room"
+              label="Oda"
               description="Konum alınmazsa bu odanın koordinatı kullanılacak."
               error={getFieldError(errors, "roomId")}
             >
@@ -409,7 +423,7 @@ export function InstructorCreateSessionForm({
 
             <Field
               id="geofence-radius-meters"
-              label="Geofence radius metre"
+              label="Yoklama alanı radius (metre)"
               description={`Varsayılan ${INSTRUCTOR_SESSION_RADIUS_METERS_DEFAULT} metredir.`}
               error={getFieldError(errors, "geofenceRadiusMeters")}
             >
@@ -466,10 +480,18 @@ export function InstructorCreateSessionForm({
                 </p>
                 <p>{selectedRoom.address ?? "Adres belirtilmedi"}</p>
                 {hasRoomCoordinates(selectedRoom) ? (
-                  <p>
-                    Oda koordinatı: {selectedRoom.latitude},{" "}
-                    {selectedRoom.longitude}
-                  </p>
+                  <>
+                    <p>
+                      Oda koordinatı: {selectedRoom.latitude},{" "}
+                      {selectedRoom.longitude}
+                    </p>
+                    <p>
+                      Oda radius değeri:{" "}
+                      {selectedRoom.allowedRadiusMeters
+                        ? `${selectedRoom.allowedRadiusMeters} metre`
+                        : "Belirtilmedi"}
+                    </p>
+                  </>
                 ) : (
                   <p className="text-amber-700">
                     Bu odada koordinat yok. Konum almazsanız oturum
@@ -485,7 +507,7 @@ export function InstructorCreateSessionForm({
       <div className="flex flex-col gap-3 rounded-lg border border-neutral-200 bg-white p-5 shadow-subtle sm:flex-row sm:items-center sm:justify-between">
         <div>
           <p className="text-sm font-medium text-neutral-950">
-            Status: ACTIVE
+            Durum: Aktif
           </p>
           <p className="mt-1 text-sm text-neutral-600">
             Oturum oluşturulduktan sonra QR paneli açılır.

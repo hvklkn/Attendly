@@ -197,7 +197,7 @@ export default async function AdminRoomsPage({
             }
             icon={<MapPin className="h-5 w-5" aria-hidden="true" />}
             actionHref={routes.admin.roomCreate}
-            actionLabel="Oda Oluştur"
+            actionLabel="Yeni Oda Ekle"
           />
         )}
       </SectionCard>

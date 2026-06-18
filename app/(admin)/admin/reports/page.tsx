@@ -13,6 +13,7 @@ import { PageHeader } from "@/components/ui/PageHeader";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { StatCard } from "@/components/ui/StatCard";
 import { StatusBadge } from "@/components/ui/StatusBadge";
+import { routes } from "@/constants/routes";
 import { requireAdminAuthContext } from "@/lib/admin/auth";
 import { getAdminReportsData } from "@/lib/admin/queries";
 import {
@@ -29,14 +30,14 @@ const reportCards = [
   },
   {
     title: "Katılım Eğilimleri",
-    description: "Ders, şube ve dönem bazında katılım eğilimleri.",
-    status: "Planlandı",
+    description: "Ders ve şube bazında mevcut yoklama verilerinden özet görünüm.",
+    status: "Hazır",
     icon: <BarChart3 className="h-4 w-4" aria-hidden="true" />,
   },
   {
     title: "Dışa Aktarım Paketi",
-    description: "Akademik veya eğitim operasyonları için CSV uyumlu kayıtlar.",
-    status: "Planlandı",
+    description: "Oturum detaylarından alınabilen CSV uyumlu yoklama kayıtları.",
+    status: "Hazır",
     icon: <FileSpreadsheet className="h-4 w-4" aria-hidden="true" />,
   },
 ];
@@ -174,13 +175,15 @@ export default async function AdminReportsPage() {
         </SectionCard>
 
         <SectionCard
-          title="Dışa Aktarım Kuyruğu"
-          description="Arka plan işleriyle üretilen raporlar ileride burada izlenecek."
+          title="Dışa Aktarım Durumu"
+          description="CSV çıktıları oturum detayındaki yoklama raporundan alınır."
         >
           <EmptyState
-            title="Dışa aktarım yok"
-            description="CSV ve PDF dışa aktarım işleri rapor üretimi bağlandığında burada görünecek."
+            title="Oturum seçerek dışa aktarın"
+            description="Bir yoklama oturumunu açıp rapor bölümünden Türkçe kolon başlıklarıyla CSV indirebilirsiniz."
             icon={<Download className="h-5 w-5" aria-hidden="true" />}
+            actionHref={routes.admin.sessions}
+            actionLabel="Oturumları Aç"
           />
         </SectionCard>
       </section>
@@ -261,7 +264,7 @@ export default async function AdminReportsPage() {
 
       <SectionCard
         title="Rapor Kütüphanesi"
-        description="Gelecek veri kaynakları için hazırlanmış yeniden kullanılabilir rapor alanları."
+        description="Sunumda kullanılabilecek özet rapor alanları."
       >
         <div className="grid gap-4 lg:grid-cols-3">
           {reportCards.map((report) => (
@@ -275,7 +278,7 @@ export default async function AdminReportsPage() {
                 </div>
                 <StatusBadge
                   label={report.status}
-                  tone={report.status === "Veriye hazır" ? "info" : "warning"}
+                  tone={report.status === "Hazır" ? "success" : "info"}
                 />
               </div>
               <h3 className="mt-4 font-semibold text-neutral-950">
@@ -291,7 +294,7 @@ export default async function AdminReportsPage() {
 
       <SectionCard
         title="Rapor Filtreleri"
-        description="Tarih aralığı, ders, şube ve durum filtreleri rapor üretim akışı için ayrıldı."
+        description="Bu demo görünümünde raporlar aktif kurumun tüm verisini kapsar."
       >
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           {["Tarih aralığı", "Ders", "Şube", "Yoklama durumu"].map(
@@ -304,7 +307,7 @@ export default async function AdminReportsPage() {
                   {filter}
                 </p>
                 <p className="mt-1 text-sm font-medium text-neutral-900">
-                  Planlandı
+                  Tüm veriler
                 </p>
               </div>
             ),

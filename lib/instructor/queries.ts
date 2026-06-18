@@ -38,19 +38,35 @@ export async function getInstructorDashboardData(
   authContext: InstructorAuthContext,
 ) {
   const now = new Date();
+  const todayStart = new Date(now);
+  todayStart.setHours(0, 0, 0, 0);
+  const tomorrowStart = new Date(todayStart);
+  tomorrowStart.setDate(tomorrowStart.getDate() + 1);
   const where = getInstructorSessionWhere(authContext);
   const organizationId = getInstructorOrganizationId(authContext);
 
   const [
     totalSessions,
+    todaySessionsCount,
     upcomingSessionsCount,
     activeSessionsCount,
     totalSections,
     distinctStudents,
     sections,
+    recentSessions,
+    recentSecurityAlerts,
   ] = await Promise.all([
     db.attendanceSession.count({
       where,
+    }),
+    db.attendanceSession.count({
+      where: {
+        ...where,
+        startTime: {
+          gte: todayStart,
+          lt: tomorrowStart,
+        },
+      },
     }),
     db.attendanceSession.count({
       where: {
@@ -127,15 +143,74 @@ export async function getInstructorDashboardData(
         },
       },
     }),
+    db.attendanceSession.findMany({
+      where,
+      orderBy: [
+        {
+          startTime: "desc",
+        },
+        {
+          createdAt: "desc",
+        },
+      ],
+      take: 6,
+      select: instructorSessionListSelect,
+    }),
+    db.attendanceAlert.findMany({
+      where: {
+        organizationId,
+        attendanceSession: {
+          section: {
+            instructorMembershipId: authContext.membership.id,
+          },
+        },
+      },
+      orderBy: {
+        createdAt: "desc",
+      },
+      take: 5,
+      select: {
+        id: true,
+        alertType: true,
+        message: true,
+        createdAt: true,
+        attendanceSession: {
+          select: {
+            id: true,
+            title: true,
+            section: {
+              select: {
+                name: true,
+                code: true,
+                course: {
+                  select: {
+                    code: true,
+                  },
+                },
+              },
+            },
+          },
+        },
+        studentUser: {
+          select: {
+            name: true,
+            email: true,
+          },
+        },
+      },
+    }),
   ]);
 
   return {
     totalSessions,
+    todaySessionsCount,
     upcomingSessionsCount,
     activeSessionsCount,
     totalSections,
     totalStudents: distinctStudents.length,
     sections,
+    recentSessions,
+    recentSecurityAlerts,
   };
 }
 
@@ -336,6 +411,7 @@ export async function getInstructorSessionDetailData(
                     createdAt: true,
                     locationAccuracyMeters: true,
                     distanceMeters: true,
+                    rejectionReason: true,
                     presenceChecks: {
                       where: {
                         checkType: PresenceCheckType.INITIAL_CHECK_IN,
@@ -416,6 +492,24 @@ export async function getInstructorSessionDetailData(
                 checkedAt: true,
               },
             },
+            studentUser: {
+              select: {
+                name: true,
+                email: true,
+              },
+            },
+          },
+        },
+        attendanceAlerts: {
+          orderBy: {
+            createdAt: "desc",
+          },
+          take: 10,
+          select: {
+            id: true,
+            alertType: true,
+            message: true,
+            createdAt: true,
             studentUser: {
               select: {
                 name: true,
@@ -703,6 +797,15 @@ const instructorSessionListSelect = {
           title: true,
         },
       },
+      _count: {
+        select: {
+          enrollments: {
+            where: {
+              status: EnrollmentStatus.ACTIVE,
+            },
+          },
+        },
+      },
     },
   },
   room: {
@@ -725,6 +828,11 @@ const instructorSessionListSelect = {
   _count: {
     select: {
       attendanceRecords: true,
+    },
+  },
+  attendanceRecords: {
+    select: {
+      status: true,
     },
   },
 } as const;

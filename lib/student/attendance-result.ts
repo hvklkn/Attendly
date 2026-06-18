@@ -6,10 +6,13 @@ export type StudentScanResultCode =
   | "late_success"
   | "already_checked_in"
   | "outside_geofence"
+  | "low_accuracy_location"
   | "expired_token"
   | "revoked_token"
   | "invalid_token"
   | "session_closed"
+  | "session_not_active"
+  | "student_not_enrolled"
   | "session_unavailable"
   | "location_unavailable"
   | "error";

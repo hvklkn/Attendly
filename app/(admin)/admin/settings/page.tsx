@@ -93,7 +93,7 @@ export default async function AdminSettingsPage() {
     { label: "Geç kalma eşiği", value: "Oturum bazında belirlenir" },
     { label: "Varsayılan yarıçap", value: "Oda bazında belirlenir" },
     { label: "QR geçerlilik süresi", value: "60 saniye" },
-    { label: "Manuel inceleme", value: "Akış bekliyor" },
+    { label: "Güvenlik uyarıları", value: "Aktif" },
   ];
 
   const securitySettings = [
@@ -176,7 +176,7 @@ export default async function AdminSettingsPage() {
 
         <SectionCard
           title="Güvenlik ve Oturumlar"
-          description="Geçerli oturum modeli ve sonraki güvenlik güçlendirme alanları."
+          description="Geçerli oturum modeli ve güvenlik durumu."
           actions={
             <div className="flex h-9 w-9 items-center justify-center rounded-md bg-neutral-100 text-neutral-600">
               <ShieldCheck className="h-4 w-4" aria-hidden="true" />
@@ -188,8 +188,8 @@ export default async function AdminSettingsPage() {
       </section>
 
       <SectionCard
-        title="Yapılandırma Hazırlığı"
-        description="Bu ayarlar ileride kalıcı hale getirme ve doğrulama için yapılandırıldı."
+        title="Yapılandırma Özeti"
+        description="Bu demo kurulumunda aktif olan güvenlik ve yoklama davranışları."
       >
         <div className="grid gap-4 md:grid-cols-3">
           <div className="flex items-start gap-3 rounded-lg border border-neutral-200 bg-neutral-50 p-4">
@@ -216,8 +216,8 @@ export default async function AdminSettingsPage() {
             </div>
           </div>
           <EmptyState
-            title="Özel politika yok"
-            description="Kuruma özel politika kayıtları ayarlar kalıcı hale getirildiğinde burada görünecek."
+            title="Ek özel politika yok"
+            description="Kurum varsayılanları ile devam ediliyor; oturum bazlı kurallar yoklama oluştururken belirlenir."
             className="min-h-0 py-6"
           />
         </div>

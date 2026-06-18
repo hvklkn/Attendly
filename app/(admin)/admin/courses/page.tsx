@@ -158,7 +158,7 @@ export default async function AdminCoursesPage({
             }
             icon={<BookOpen className="h-5 w-5" aria-hidden="true" />}
             actionHref={routes.admin.courseCreate}
-            actionLabel="Ders / Kurs Oluştur"
+            actionLabel="Yeni Ders Oluştur"
           />
         )}
       </SectionCard>

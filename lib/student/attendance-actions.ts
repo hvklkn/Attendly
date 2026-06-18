@@ -5,12 +5,16 @@ import { revalidatePath } from "next/cache";
 import { routes } from "@/constants/routes";
 import { requireRole } from "@/lib/auth/guards";
 import { db } from "@/lib/db";
+import type { Prisma } from "@/lib/generated/prisma/client";
 import {
+  AttendanceAlertSeverity,
+  AttendanceAlertType,
   AttendanceRecordStatus,
   AttendanceSessionStatus,
   AttendanceSource,
   AttendanceVerificationLevel,
   EnrollmentStatus,
+  MembershipRole,
   PresenceCheckStatus,
   PresenceCheckType,
 } from "@/lib/generated/prisma/enums";
@@ -25,6 +29,8 @@ import {
   createStudentScanResultUrl,
   type StudentScanResultCode,
 } from "@/lib/student/attendance-result";
+
+const MAX_ACCEPTABLE_LOCATION_ACCURACY_METERS = 100;
 
 export type SubmitStudentAttendanceActionInput = {
   token: string;
@@ -102,12 +108,139 @@ async function getRequestMetadata() {
   }
 }
 
+function getSecurityAlertMessage(alertType: AttendanceAlertType) {
+  if (alertType === AttendanceAlertType.OUTSIDE_GEOFENCE) {
+    return "Öğrenci yoklama alanı dışından yoklama vermeyi denedi.";
+  }
+
+  if (alertType === AttendanceAlertType.LOW_ACCURACY_LOCATION) {
+    return "Öğrencinin konum doğruluğu yoklama için yeterli değil.";
+  }
+
+  if (alertType === AttendanceAlertType.DUPLICATE_CHECK_IN_ATTEMPT) {
+    return "Öğrenci aynı oturum için tekrar yoklama vermeyi denedi.";
+  }
+
+  if (alertType === AttendanceAlertType.EXPIRED_TOKEN_ATTEMPT) {
+    return "Öğrenci süresi dolmuş QR kod ile yoklamaya katılmayı denedi.";
+  }
+
+  if (alertType === AttendanceAlertType.REVOKED_TOKEN_ATTEMPT) {
+    return "Öğrenci iptal edilmiş QR kod ile yoklamaya katılmayı denedi.";
+  }
+
+  if (alertType === AttendanceAlertType.STUDENT_NOT_ENROLLED) {
+    return "Öğrenci kayıtlı olmadığı ders grubu için yoklama vermeyi denedi.";
+  }
+
+  if (alertType === AttendanceAlertType.SESSION_CLOSED_ATTEMPT) {
+    return "Öğrenci kapalı yoklama oturumuna katılmayı denedi.";
+  }
+
+  if (alertType === AttendanceAlertType.INVALID_TOKEN_ATTEMPT) {
+    return "Öğrenci geçersiz QR kod ile yoklamaya katılmayı denedi.";
+  }
+
+  return "Şüpheli yoklama denemesi kaydedildi.";
+}
+
+function getSecurityAlertSeverity(alertType: AttendanceAlertType) {
+  if (
+    alertType === AttendanceAlertType.INVALID_TOKEN_ATTEMPT ||
+    alertType === AttendanceAlertType.STUDENT_NOT_ENROLLED
+  ) {
+    return AttendanceAlertSeverity.HIGH;
+  }
+
+  if (
+    alertType === AttendanceAlertType.OUTSIDE_GEOFENCE ||
+    alertType === AttendanceAlertType.LOW_ACCURACY_LOCATION ||
+    alertType === AttendanceAlertType.SESSION_CLOSED_ATTEMPT
+  ) {
+    return AttendanceAlertSeverity.MEDIUM;
+  }
+
+  return AttendanceAlertSeverity.LOW;
+}
+
+async function createSecurityAlert(input: {
+  organizationId: string;
+  attendanceSessionId: string;
+  attendanceRecordId?: string | null;
+  studentUserId?: string | null;
+  studentMembershipId?: string | null;
+  alertType: AttendanceAlertType;
+  message?: string;
+  metadata?: Prisma.InputJsonObject;
+}) {
+  try {
+    await db.attendanceAlert.create({
+      data: {
+        organizationId: input.organizationId,
+        attendanceSessionId: input.attendanceSessionId,
+        attendanceRecordId: input.attendanceRecordId ?? null,
+        studentUserId: input.studentUserId ?? null,
+        studentMembershipId: input.studentMembershipId ?? null,
+        alertType: input.alertType,
+        severity: getSecurityAlertSeverity(input.alertType),
+        message: input.message ?? getSecurityAlertMessage(input.alertType),
+      },
+    });
+
+    if (input.metadata) {
+      await db.auditLog.create({
+        data: {
+          organizationId: input.organizationId,
+          actorUserId: input.studentUserId ?? null,
+          action: input.alertType.toLowerCase(),
+          targetType: "AttendanceSession",
+          targetId: input.attendanceSessionId,
+          metadata: input.metadata,
+        },
+      });
+    }
+  } catch {
+    // Security logging must not block the student's visible result.
+  }
+}
+
+async function createInvalidTokenAuditLog(input: {
+  organizationId: string;
+  studentUserId: string;
+  studentMembershipId: string;
+}) {
+  try {
+    await db.auditLog.create({
+      data: {
+        organizationId: input.organizationId,
+        actorUserId: input.studentUserId,
+        action: "invalid_token_attempt",
+        targetType: "QRToken",
+        targetId: null,
+        metadata: {
+          studentMembershipId: input.studentMembershipId,
+        },
+      },
+    });
+  } catch {
+    // Security logging must not block the student's visible result.
+  }
+}
+
 export async function submitStudentAttendanceAction(
   input: SubmitStudentAttendanceActionInput,
 ): Promise<SubmitStudentAttendanceActionResult> {
   const authContext = await requireRole("STUDENT");
   const token = input.token.trim();
   const now = new Date();
+
+  if (authContext.role !== MembershipRole.STUDENT) {
+    return createActionResult({
+      ok: false,
+      code: "student_not_enrolled",
+      message: "Bu işlem için öğrenci hesabı gerekir.",
+    });
+  }
 
   if (!token) {
     return createActionResult({
@@ -169,6 +302,12 @@ export async function submitStudentAttendanceAction(
       qrToken.attendanceSession.organizationId !==
         authContext.activeOrganization.id
     ) {
+      await createInvalidTokenAuditLog({
+        organizationId: authContext.activeOrganization.id,
+        studentUserId: authContext.user.id,
+        studentMembershipId: authContext.membership.id,
+      });
+
       return createActionResult({
         ok: false,
         code: "invalid_token",
@@ -179,7 +318,39 @@ export async function submitStudentAttendanceAction(
 
     const sessionId = qrToken.attendanceSession.id;
 
+    if (qrToken.attendanceSession.status === AttendanceSessionStatus.CLOSED) {
+      await createSecurityAlert({
+        organizationId: authContext.activeOrganization.id,
+        attendanceSessionId: sessionId,
+        studentUserId: authContext.user.id,
+        studentMembershipId: authContext.membership.id,
+        alertType: AttendanceAlertType.SESSION_CLOSED_ATTEMPT,
+        metadata: {
+          qrTokenId: qrToken.id,
+          tokenRevoked: Boolean(qrToken.revokedAt),
+        },
+      });
+
+      return createActionResult({
+        ok: false,
+        code: "session_closed",
+        message: "Bu yoklama oturumu kapanmıştır.",
+        sessionId,
+      });
+    }
+
     if (qrToken.revokedAt) {
+      await createSecurityAlert({
+        organizationId: authContext.activeOrganization.id,
+        attendanceSessionId: sessionId,
+        studentUserId: authContext.user.id,
+        studentMembershipId: authContext.membership.id,
+        alertType: AttendanceAlertType.REVOKED_TOKEN_ATTEMPT,
+        metadata: {
+          qrTokenId: qrToken.id,
+        },
+      });
+
       return createActionResult({
         ok: false,
         code: "revoked_token",
@@ -189,6 +360,18 @@ export async function submitStudentAttendanceAction(
     }
 
     if (qrToken.expiresAt.getTime() <= now.getTime()) {
+      await createSecurityAlert({
+        organizationId: authContext.activeOrganization.id,
+        attendanceSessionId: sessionId,
+        studentUserId: authContext.user.id,
+        studentMembershipId: authContext.membership.id,
+        alertType: AttendanceAlertType.EXPIRED_TOKEN_ATTEMPT,
+        metadata: {
+          qrTokenId: qrToken.id,
+          expiresAt: qrToken.expiresAt.toISOString(),
+        },
+      });
+
       return createActionResult({
         ok: false,
         code: "expired_token",
@@ -198,19 +381,10 @@ export async function submitStudentAttendanceAction(
       });
     }
 
-    if (qrToken.attendanceSession.status === AttendanceSessionStatus.CLOSED) {
-      return createActionResult({
-        ok: false,
-        code: "session_closed",
-        message: "Bu yoklama oturumu kapanmıştır.",
-        sessionId,
-      });
-    }
-
     if (qrToken.attendanceSession.status !== AttendanceSessionStatus.ACTIVE) {
       return createActionResult({
         ok: false,
-        code: "session_unavailable",
+        code: "session_not_active",
         message: "Oturum aktif değil. Lütfen öğretmeninizden başlatmasını isteyin.",
         sessionId,
       });
@@ -231,9 +405,21 @@ export async function submitStudentAttendanceAction(
     });
 
     if (!enrollment || enrollment.status !== EnrollmentStatus.ACTIVE) {
+      await createSecurityAlert({
+        organizationId: authContext.activeOrganization.id,
+        attendanceSessionId: sessionId,
+        studentUserId: authContext.user.id,
+        studentMembershipId: authContext.membership.id,
+        alertType: AttendanceAlertType.STUDENT_NOT_ENROLLED,
+        metadata: {
+          sectionId: qrToken.attendanceSession.sectionId,
+          qrTokenId: qrToken.id,
+        },
+      });
+
       return createActionResult({
         ok: false,
-        code: "session_unavailable",
+        code: "student_not_enrolled",
         message: "Bu ders grubuna kayıtlı görünmüyorsunuz.",
         sessionId,
       });
@@ -253,10 +439,23 @@ export async function submitStudentAttendanceAction(
     });
 
     if (existingRecord) {
+      await createSecurityAlert({
+        organizationId: authContext.activeOrganization.id,
+        attendanceSessionId: sessionId,
+        attendanceRecordId: existingRecord.id,
+        studentUserId: authContext.user.id,
+        studentMembershipId: authContext.membership.id,
+        alertType: AttendanceAlertType.DUPLICATE_CHECK_IN_ATTEMPT,
+        metadata: {
+          qrTokenId: qrToken.id,
+          existingRecordId: existingRecord.id,
+        },
+      });
+
       return createActionResult({
         ok: true,
         code: "already_checked_in",
-        message: "Bu oturuma daha önce yoklama verdiniz.",
+        message: "Yoklamanız daha önce alınmış.",
         recordId: existingRecord.id,
         sessionId,
       });
@@ -291,16 +490,32 @@ export async function submitStudentAttendanceAction(
     const isInsideGeofence = distanceMeters <= geofence.radiusMeters;
     const requestMetadata = await getRequestMetadata();
     const locationAccuracyMeters = normalizeAccuracyMeters(input.accuracyMeters);
-    const status = isInsideGeofence
+    const hasLowAccuracy =
+      locationAccuracyMeters === null ||
+      locationAccuracyMeters > MAX_ACCEPTABLE_LOCATION_ACCURACY_METERS;
+    const isAcceptedLocation = isInsideGeofence && !hasLowAccuracy;
+    const status = isAcceptedLocation
       ? getAcceptedAttendanceStatus(
           qrToken.attendanceSession.startTime,
           qrToken.attendanceSession.lateThresholdMinutes,
           now,
         )
       : AttendanceRecordStatus.REJECTED;
-    const rejectionReason = isInsideGeofence
+    const rejectionReason = isAcceptedLocation
       ? null
-      : "Konum dışındasınız. Yoklama kaydı reddedildi.";
+      : hasLowAccuracy
+        ? "Konum doğruluğu düşük. Lütfen GPS’in açık olduğundan emin olup tekrar deneyin."
+        : "Konum dışındasınız. Yoklama kaydı reddedildi.";
+    const presenceCheckStatus = hasLowAccuracy
+      ? PresenceCheckStatus.LOW_ACCURACY
+      : isInsideGeofence
+        ? PresenceCheckStatus.INSIDE_GEOFENCE
+        : PresenceCheckStatus.OUTSIDE_GEOFENCE;
+    const rejectedAlertType = hasLowAccuracy
+      ? AttendanceAlertType.LOW_ACCURACY_LOCATION
+      : !isInsideGeofence
+        ? AttendanceAlertType.OUTSIDE_GEOFENCE
+        : null;
 
     const transactionResult = await db.$transaction(async (tx) => {
       const recordCreatedDuringRace = await tx.attendanceRecord.findUnique({
@@ -332,11 +547,11 @@ export async function submitStudentAttendanceAction(
           enrollmentId: enrollment.id,
           status,
           source: AttendanceSource.QR_SCAN,
-          verificationLevel: isInsideGeofence
+          verificationLevel: isAcceptedLocation
             ? AttendanceVerificationLevel.INITIAL_ONLY
             : AttendanceVerificationLevel.SUSPICIOUS,
-          lastVerifiedAt: isInsideGeofence ? now : null,
-          suspiciousFlag: !isInsideGeofence,
+          lastVerifiedAt: isAcceptedLocation ? now : null,
+          suspiciousFlag: !isAcceptedLocation,
           checkedInAt: now,
           locationLatitude: input.latitude,
           locationLongitude: input.longitude,
@@ -359,9 +574,7 @@ export async function submitStudentAttendanceAction(
           studentUserId: authContext.user.id,
           studentMembershipId: authContext.membership.id,
           checkType: PresenceCheckType.INITIAL_CHECK_IN,
-          status: isInsideGeofence
-            ? PresenceCheckStatus.INSIDE_GEOFENCE
-            : PresenceCheckStatus.OUTSIDE_GEOFENCE,
+          status: presenceCheckStatus,
           latitude: input.latitude,
           longitude: input.longitude,
           accuracyMeters: locationAccuracyMeters,
@@ -371,9 +584,25 @@ export async function submitStudentAttendanceAction(
             qrTokenId: qrToken.id,
             geofenceRadiusMeters: geofence.radiusMeters,
             geofenceSource: geofence.source,
+            lowAccuracy: hasLowAccuracy,
           },
         },
       });
+
+      if (rejectedAlertType) {
+        await tx.attendanceAlert.create({
+          data: {
+            organizationId: authContext.activeOrganization.id,
+            attendanceSessionId: sessionId,
+            attendanceRecordId: record.id,
+            studentUserId: authContext.user.id,
+            studentMembershipId: authContext.membership.id,
+            alertType: rejectedAlertType,
+            severity: getSecurityAlertSeverity(rejectedAlertType),
+            message: rejectionReason ?? getSecurityAlertMessage(rejectedAlertType),
+          },
+        });
+      }
 
       return {
         duplicateRecordId: null,
@@ -388,10 +617,24 @@ export async function submitStudentAttendanceAction(
     revalidatePath(routes.instructor.sessions);
 
     if (transactionResult.duplicateRecordId) {
+      await createSecurityAlert({
+        organizationId: authContext.activeOrganization.id,
+        attendanceSessionId: sessionId,
+        attendanceRecordId: transactionResult.duplicateRecordId,
+        studentUserId: authContext.user.id,
+        studentMembershipId: authContext.membership.id,
+        alertType: AttendanceAlertType.DUPLICATE_CHECK_IN_ATTEMPT,
+        metadata: {
+          qrTokenId: qrToken.id,
+          existingRecordId: transactionResult.duplicateRecordId,
+          raceDetected: true,
+        },
+      });
+
       return createActionResult({
         ok: true,
         code: "already_checked_in",
-        message: "Bu oturuma daha önce yoklama verdiniz.",
+        message: "Yoklamanız daha önce alınmış.",
         recordId: transactionResult.duplicateRecordId,
         sessionId,
       });
@@ -403,6 +646,17 @@ export async function submitStudentAttendanceAction(
         code: "error",
         message:
           "Yoklama kaydı oluşturulamadı. Lütfen QR kodu tekrar okutun.",
+        sessionId,
+      });
+    }
+
+    if (hasLowAccuracy) {
+      return createActionResult({
+        ok: false,
+        code: "low_accuracy_location",
+        message:
+          "Konum doğruluğu düşük. Lütfen GPS’in açık olduğundan emin olup tekrar deneyin.",
+        recordId: transactionResult.recordId,
         sessionId,
       });
     }
@@ -428,9 +682,7 @@ export async function submitStudentAttendanceAction(
       recordId: transactionResult.recordId,
       sessionId,
     });
-  } catch (error) {
-    console.error("Student attendance check-in failed", error);
-
+  } catch {
     return createActionResult({
       ok: false,
       code: "error",

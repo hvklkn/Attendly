@@ -11,6 +11,7 @@ export type StudentScanValidationStatus =
   | "revoked_token"
   | "expired_token"
   | "session_closed"
+  | "session_not_active"
   | "session_unavailable"
   | "valid";
 
@@ -142,6 +143,12 @@ export async function validateStudentScanToken(
       };
     }
 
+    if (qrToken.attendanceSession.status === AttendanceSessionStatus.CLOSED) {
+      return {
+        status: "session_closed",
+      };
+    }
+
     if (qrToken.revokedAt) {
       return {
         status: "revoked_token",
@@ -154,15 +161,9 @@ export async function validateStudentScanToken(
       };
     }
 
-    if (qrToken.attendanceSession.status === AttendanceSessionStatus.CLOSED) {
-      return {
-        status: "session_closed",
-      };
-    }
-
     if (!canScanSessionStatus(qrToken.attendanceSession.status)) {
       return {
-        status: "session_unavailable",
+        status: "session_not_active",
       };
     }
 

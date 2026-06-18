@@ -20,7 +20,7 @@ export default function FeaturesPage() {
       />
       <SectionCard
         title="Ürün Alanları"
-        description="Bu alanlar kademeli olarak gerçek yoklama akışına bağlanacak."
+        description="Canlı demo akışında kullanılan temel Attendly modülleri."
       >
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {featureAreas.map((feature) => (
@@ -28,7 +28,7 @@ export default function FeaturesPage() {
               key={feature}
               className="rounded-lg border border-neutral-200 bg-neutral-50 p-4"
             >
-              <StatusBadge label="Planlandı" tone="info" />
+              <StatusBadge label="Hazır" tone="success" />
               <p className="mt-3 text-sm font-medium text-neutral-900">
                 {feature}
               </p>

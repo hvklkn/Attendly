@@ -50,10 +50,13 @@ const RESULT_CODES = new Set<StudentScanResultCode>([
   "late_success",
   "already_checked_in",
   "outside_geofence",
+  "low_accuracy_location",
   "expired_token",
   "revoked_token",
   "invalid_token",
   "session_closed",
+  "session_not_active",
+  "student_not_enrolled",
   "session_unavailable",
   "location_unavailable",
   "error",
@@ -69,12 +72,23 @@ function normalizeCode(value: string | undefined): StudentScanResultCode {
     : "error";
 }
 
-function getCodeFromRecord(status: AttendanceRecordStatus) {
+function isLowAccuracyRejection(reason: string | null | undefined) {
+  return reason?.toLocaleLowerCase("tr").includes("doğruluğu düşük") ?? false;
+}
+
+function getCodeFromRecord(
+  status: AttendanceRecordStatus,
+  rejectionReason?: string | null,
+) {
   if (status === AttendanceRecordStatus.LATE) {
     return "late_success";
   }
 
   if (status === AttendanceRecordStatus.REJECTED) {
+    if (isLowAccuracyRejection(rejectionReason)) {
+      return "low_accuracy_location";
+    }
+
     return "outside_geofence";
   }
 
@@ -105,9 +119,20 @@ function getResultContent(code: StudentScanResultCode): ResultContent {
   if (code === "outside_geofence") {
     return {
       title: "Konum dışındasınız.",
-      description: "Yoklama kaydı reddedildi ve öğretmen panelinde görünür.",
+      description: "Yoklama alanı dışında olduğunuz için kaydınız reddedildi.",
       badge: "Konum dışı",
       tone: "danger",
+      icon: <MapPin className="h-5 w-5" aria-hidden="true" />,
+    };
+  }
+
+  if (code === "low_accuracy_location") {
+    return {
+      title: "Konum doğruluğu düşük.",
+      description:
+        "Konum doğruluğu düşük. Lütfen GPS’in açık olduğundan emin olup tekrar deneyin.",
+      badge: "Düşük doğruluk",
+      tone: "warning",
       icon: <MapPin className="h-5 w-5" aria-hidden="true" />,
     };
   }
@@ -134,7 +159,7 @@ function getResultContent(code: StudentScanResultCode): ResultContent {
 
   if (code === "already_checked_in") {
     return {
-      title: "Yoklamanız zaten kayıtlı.",
+      title: "Yoklamanız daha önce alınmış.",
       description: "Bu oturum için daha önce oluşturulan kayıt gösteriliyor.",
       badge: "Zaten kayıtlı",
       tone: "neutral",
@@ -148,6 +173,26 @@ function getResultContent(code: StudentScanResultCode): ResultContent {
       description: "Bu oturum için yeni yoklama kaydı alınmıyor.",
       badge: "Kapandı",
       tone: "neutral",
+      icon: <Ban className="h-5 w-5" aria-hidden="true" />,
+    };
+  }
+
+  if (code === "session_not_active") {
+    return {
+      title: "Oturum aktif değil.",
+      description: "Yoklamaya katılmak için oturumun aktif olması gerekir.",
+      badge: "Aktif değil",
+      tone: "neutral",
+      icon: <Ban className="h-5 w-5" aria-hidden="true" />,
+    };
+  }
+
+  if (code === "student_not_enrolled") {
+    return {
+      title: "Bu ders grubuna kayıtlı değilsiniz.",
+      description: "Yoklamaya katılmak için ilgili şubede aktif kaydınız olmalıdır.",
+      badge: "Kayıt yok",
+      tone: "danger",
       icon: <Ban className="h-5 w-5" aria-hidden="true" />,
     };
   }
@@ -184,8 +229,8 @@ function getResultContent(code: StudentScanResultCode): ResultContent {
 
   if (code === "invalid_token") {
     return {
-      title: "Yoklama kaydı oluşturulamadı.",
-      description: "Lütfen QR kodu tekrar okutun.",
+      title: "Geçersiz QR kodu.",
+      description: "Bu QR kod geçerli bir yoklama oturumuyla eşleşmiyor.",
       badge: "Geçersiz",
       tone: "danger",
       icon: <AlertTriangle className="h-5 w-5" aria-hidden="true" />,
@@ -410,7 +455,7 @@ export default async function StudentScanResultPage({
   const resultCode = record
     ? requestedCode === "already_checked_in"
       ? requestedCode
-      : getCodeFromRecord(record.status)
+      : getCodeFromRecord(record.status, record.rejectionReason)
     : requestedCode;
   const content = getResultContent(resultCode);
   const recordItems = record
@@ -433,7 +478,9 @@ export default async function StudentScanResultPage({
           label: "Konum sonucu",
           value:
             record.status === AttendanceRecordStatus.REJECTED
-              ? "Konum dışı"
+              ? isLowAccuracyRejection(record.rejectionReason)
+                ? "Düşük doğruluklu konum"
+                : "Konum dışı"
               : "Konum içi",
         },
         {

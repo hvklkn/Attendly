@@ -108,6 +108,16 @@ function getScanStateContent(
     };
   }
 
+  if (status === "session_not_active") {
+    return {
+      title: "Oturum henüz aktif değil.",
+      description: "Yoklamaya katılmak için eğitmeninizin oturumu başlatması gerekir.",
+      badge: "Aktif değil",
+      tone: "neutral",
+      icon: <Ban className="h-5 w-5" aria-hidden="true" />,
+    };
+  }
+
   return {
     title: "Oturum uygun değil",
     description: "Bu oturum şu anda yoklama için uygun değil.",

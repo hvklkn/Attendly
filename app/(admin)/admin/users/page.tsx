@@ -352,6 +352,8 @@ export default async function AdminUsersPage({
                 : "Kurum üyelik kayıtları oluşturulduğunda üyeler burada görünecek."
             }
             icon={<Users className="h-5 w-5" aria-hidden="true" />}
+            actionHref={routes.admin.usersNew}
+            actionLabel="Yeni Kullanıcı Ekle"
           />
         )}
       </SectionCard>

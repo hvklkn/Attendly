@@ -385,6 +385,16 @@ export async function closeInstructorAttendanceSession(
           status: AttendanceSessionStatus.CLOSED,
         },
       }),
+      db.qRToken.updateMany({
+        where: {
+          organizationId,
+          attendanceSessionId: session.id,
+          revokedAt: null,
+        },
+        data: {
+          revokedAt: new Date(),
+        },
+      }),
       db.auditLog.create({
         data: {
           organizationId,

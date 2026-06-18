@@ -26,6 +26,7 @@ import {
 import { getInstructorSessionDetailData } from "@/lib/instructor/queries";
 import {
   formatDateTimeTr,
+  getAttendanceAlertTypeLabel,
   getAttendanceRecordStatusLabel,
   getAttendanceSessionStatusLabel,
   getPresenceCheckStatusLabel,
@@ -127,6 +128,10 @@ function getPresenceCheckTone(status: string | null | undefined) {
   }
 
   if (status === "LOCATION_UNAVAILABLE" || status === "QR_NOT_CONFIRMED") {
+    return "warning" as const;
+  }
+
+  if (status === "LOW_ACCURACY") {
     return "warning" as const;
   }
 
@@ -264,6 +269,7 @@ export default async function InstructorSessionDetailPage({
     const locationVerification = record
       ? getLocationVerificationLabel(latestPresenceCheck?.status, record.status)
       : "Yoklama kaydı yok";
+    const rejectionReason = record?.rejectionReason ?? null;
 
     return {
       enrollmentId: enrollment.id,
@@ -275,6 +281,7 @@ export default async function InstructorSessionDetailPage({
       checkedInAt,
       distance,
       locationVerification,
+      rejectionReason,
       locationVerificationTone: record
         ? getLocationVerificationTone(latestPresenceCheck?.status, record.status)
         : "neutral",
@@ -288,7 +295,9 @@ export default async function InstructorSessionDetailPage({
     status: row.statusLabel,
     checkedInAt: row.checkedInAt,
     distance: row.distance,
-    locationVerification: row.locationVerification,
+    locationVerification: row.rejectionReason
+      ? `${row.locationVerification} - ${row.rejectionReason}`
+      : row.locationVerification,
   }));
   const totalRegisteredStudents = reportRows.length;
   const presentCount = reportRows.filter(
@@ -569,7 +578,7 @@ export default async function InstructorSessionDetailPage({
       <section className="grid gap-6 xl:grid-cols-[0.85fr_1fr]">
         <SectionCard
           title="Oda ve Konum"
-          description="Konum doğrulaması sonraki adımda bu bilgilerle genişletilecek."
+          description="Oturum konumu ve oda bilgisi öğrenci check-in doğrulamasında kullanılır."
           actions={
             <div className="flex h-9 w-9 items-center justify-center rounded-md bg-neutral-100 text-neutral-600">
               <MapPin className="h-4 w-4" aria-hidden="true" />
@@ -591,7 +600,7 @@ export default async function InstructorSessionDetailPage({
         <div className="grid gap-6">
           <SectionCard
             title="Konum Doğrulama"
-            description="Öğrenci konumu daha sonra bu yoklama alanıyla karşılaştırılacak."
+            description="Öğrenci konumu bu yoklama alanıyla karşılaştırılarak kabul veya ret kararı verilir."
             actions={
               <div className="flex h-9 w-9 items-center justify-center rounded-md bg-neutral-100 text-neutral-600">
                 <MapPin className="h-4 w-4" aria-hidden="true" />
@@ -647,20 +656,61 @@ export default async function InstructorSessionDetailPage({
           </SectionCard>
 
           <SectionCard
-            title="Canlı Uyarılar"
-            description="Öğrenciler ara kontrolde doğrulanmadığında veya yoklama alanı dışına çıktığında burada görünür."
+            title="Güvenlik Uyarıları"
+            description="Son şüpheli yoklama denemeleri ve reddedilen güvenlik olayları."
             actions={
               <div className="flex h-9 w-9 items-center justify-center rounded-md bg-neutral-100 text-neutral-600">
                 <AlertTriangle className="h-4 w-4" aria-hidden="true" />
               </div>
             }
           >
-            <EmptyState
-              title="Henüz uyarı yok"
-              description="Devamlılık kontrolü ve uyarı üretimi sonraki adımda bağlanacak."
-              icon={<AlertTriangle className="h-5 w-5" aria-hidden="true" />}
-              className="min-h-40"
-            />
+            {session.attendanceAlerts.length > 0 ? (
+              <div className="overflow-hidden rounded-lg border border-neutral-200">
+                <table className="w-full border-collapse text-left text-sm">
+                  <thead className="bg-neutral-50 text-xs font-medium uppercase tracking-normal text-neutral-500">
+                    <tr>
+                      <th className="px-4 py-3">Öğrenci / Email</th>
+                      <th className="px-4 py-3">Olay tipi</th>
+                      <th className="px-4 py-3">Zaman</th>
+                      <th className="px-4 py-3">Açıklama</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-neutral-100 bg-white">
+                    {session.attendanceAlerts.map((alert) => (
+                      <tr key={alert.id}>
+                        <td className="px-4 py-4">
+                          <p className="font-medium text-neutral-950">
+                            {alert.studentUser?.name ?? "Bilinmeyen öğrenci"}
+                          </p>
+                          <p className="mt-1 text-xs text-neutral-500">
+                            {alert.studentUser?.email ?? "Email yok"}
+                          </p>
+                        </td>
+                        <td className="px-4 py-4">
+                          <StatusBadge
+                            label={getAttendanceAlertTypeLabel(alert.alertType)}
+                            tone="warning"
+                          />
+                        </td>
+                        <td className="px-4 py-4 text-neutral-600">
+                          {formatDateTimeTr(alert.createdAt)}
+                        </td>
+                        <td className="px-4 py-4 text-neutral-600">
+                          {alert.message}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <EmptyState
+                title="Henüz güvenlik uyarısı yok"
+                description="Şüpheli yoklama denemeleri oluştuğunda burada listelenecek."
+                icon={<AlertTriangle className="h-5 w-5" aria-hidden="true" />}
+                className="min-h-40"
+              />
+            )}
           </SectionCard>
         </div>
       </section>
@@ -713,10 +763,17 @@ export default async function InstructorSessionDetailPage({
                         {row.distance}
                       </td>
                       <td className="px-4 py-4">
-                        <StatusBadge
-                          label={row.locationVerification}
-                          tone={row.locationVerificationTone}
-                        />
+                        <div className="grid gap-2">
+                          <StatusBadge
+                            label={row.locationVerification}
+                            tone={row.locationVerificationTone}
+                          />
+                          {row.rejectionReason ? (
+                            <p className="text-xs leading-5 text-neutral-500">
+                              {row.rejectionReason}
+                            </p>
+                          ) : null}
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -768,10 +825,17 @@ export default async function InstructorSessionDetailPage({
                         Konum doğrulama sonucu
                       </dt>
                       <dd className="mt-1">
-                        <StatusBadge
-                          label={row.locationVerification}
-                          tone={row.locationVerificationTone}
-                        />
+                        <div className="grid gap-2">
+                          <StatusBadge
+                            label={row.locationVerification}
+                            tone={row.locationVerificationTone}
+                          />
+                          {row.rejectionReason ? (
+                            <p className="text-xs leading-5 text-neutral-500">
+                              {row.rejectionReason}
+                            </p>
+                          ) : null}
+                        </div>
                       </dd>
                     </div>
                   </dl>

@@ -96,6 +96,7 @@ const presenceCheckTypeLabels: Record<PresenceCheckType, string> = {
 const presenceCheckStatusLabels: Record<PresenceCheckStatus, string> = {
   INSIDE_GEOFENCE: "Yoklama Alanı İçinde",
   OUTSIDE_GEOFENCE: "Yoklama Alanı Dışında",
+  LOW_ACCURACY: "Düşük Doğruluklu Konum",
   LOCATION_UNAVAILABLE: "Konum Alınamadı",
   QR_NOT_CONFIRMED: "QR Doğrulanmadı",
   SUSPICIOUS: "Şüpheli",
@@ -104,6 +105,14 @@ const presenceCheckStatusLabels: Record<PresenceCheckStatus, string> = {
 
 const attendanceAlertTypeLabels: Record<AttendanceAlertType, string> = {
   LEFT_GEOFENCE: "Yoklama Alanından Ayrıldı",
+  OUTSIDE_GEOFENCE: "Konum Dışı Deneme",
+  LOW_ACCURACY_LOCATION: "Düşük Doğruluklu Konum",
+  DUPLICATE_CHECK_IN_ATTEMPT: "Tekrar Yoklama Denemesi",
+  EXPIRED_TOKEN_ATTEMPT: "Süresi Dolmuş QR Denemesi",
+  REVOKED_TOKEN_ATTEMPT: "İptal Edilmiş QR Denemesi",
+  STUDENT_NOT_ENROLLED: "Kayıtsız Öğrenci Denemesi",
+  SESSION_CLOSED_ATTEMPT: "Kapalı Oturuma Giriş Denemesi",
+  INVALID_TOKEN_ATTEMPT: "Geçersiz QR Denemesi",
   MISSED_MID_SESSION_CHECK: "Ara Kontrolü Kaçırdı",
   LOCATION_PERMISSION_LOST: "Konum İzni Kaybedildi",
   SUSPICIOUS_RECHECK: "Şüpheli Yeniden Kontrol",

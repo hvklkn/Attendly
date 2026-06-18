@@ -7,6 +7,7 @@ import {
   CalendarPlus,
   CheckCircle2,
   Clock3,
+  DoorOpen,
   FileBarChart,
   ShieldCheck,
   UserPlus,
@@ -52,6 +53,18 @@ const quickActions = [
     icon: <UserPlus className="h-4 w-4" aria-hidden="true" />,
   },
   {
+    title: "Oda ekle",
+    description: "Konum ve radius bilgisi olan sınıf kaydı oluşturun.",
+    href: routes.admin.roomCreate,
+    icon: <DoorOpen className="h-4 w-4" aria-hidden="true" />,
+  },
+  {
+    title: "Kullanıcı ekle",
+    description: "Admin, öğretmen veya öğrenci hesabı oluşturun.",
+    href: routes.admin.usersNew,
+    icon: <Users className="h-4 w-4" aria-hidden="true" />,
+  },
+  {
     title: "Raporları aç",
     description: "Yoklama özetlerini inceleyin.",
     href: routes.admin.reports,
@@ -63,7 +76,8 @@ const platformStatus = [
   { label: "Giriş sınırı", status: "Hazır", tone: "success" as const },
   { label: "Prisma şeması", status: "Hazır", tone: "success" as const },
   { label: "QR akışı", status: "Hazır", tone: "success" as const },
-  { label: "Rapor motoru", status: "Planlandı", tone: "warning" as const },
+  { label: "Rapor motoru", status: "Hazır", tone: "success" as const },
+  { label: "Güvenlik uyarıları", status: "Hazır", tone: "success" as const },
 ];
 
 function formatDateTime(date: Date) {
@@ -76,6 +90,7 @@ function formatStatus(status: string) {
 
 function getSessionTone(status: string) {
   if (status === "ACTIVE") return "success" as const;
+  if (status === "CLOSED") return "neutral" as const;
   if (status === "DRAFT") return "warning" as const;
   if (status === "CANCELLED") return "danger" as const;
   return "info" as const;
@@ -87,31 +102,15 @@ export default async function AdminDashboardPage() {
 
   const overviewStats = [
     {
-      label: "Dersler / Kurslar",
-      value: String(data.totalCourses),
-      trend: "Kurum kataloğu",
-      description: "Ders grubu oluşturmak için kullanılan kayıtlar.",
-      icon: <BookOpen className="h-4 w-4" aria-hidden="true" />,
+      label: "Toplam Kullanıcı",
+      value: String(data.totalUsers),
+      trend: "Kurum üyeliği",
+      description: "Admin, öğretmen ve öğrenci hesapları.",
+      icon: <Users className="h-4 w-4" aria-hidden="true" />,
       tone: "neutral" as const,
     },
     {
-      label: "Toplam Oturum",
-      value: String(data.totalSessions),
-      trend: "Tüm zamanlar",
-      description: "Bu kuruma ait yoklama oturumları.",
-      icon: <CalendarDays className="h-4 w-4" aria-hidden="true" />,
-      tone: "info" as const,
-    },
-    {
-      label: "Ders Grupları",
-      value: String(data.totalSections),
-      trend: "Kurum kapsamı",
-      description: "Öğretmen ve öğrenci kayıtlarının bağlandığı gruplar.",
-      icon: <BookOpen className="h-4 w-4" aria-hidden="true" />,
-      tone: "neutral" as const,
-    },
-    {
-      label: "Öğretmenler",
+      label: "Toplam Eğitmen",
       value: String(data.totalInstructors),
       trend: "Aktif kurum",
       description: "Bu kurumda öğretmen rolündeki üyelikler.",
@@ -119,11 +118,43 @@ export default async function AdminDashboardPage() {
       tone: "success" as const,
     },
     {
-      label: "Öğrenciler",
+      label: "Toplam Öğrenci",
       value: String(data.totalStudents),
       trend: "Aktif kurum",
       description: "Ders gruplarına kayıt edilebilen öğrenci üyelikleri.",
       icon: <CheckCircle2 className="h-4 w-4" aria-hidden="true" />,
+      tone: "info" as const,
+    },
+    {
+      label: "Toplam Ders",
+      value: String(data.totalCourses),
+      trend: "Kurum kataloğu",
+      description: "Ders grubu oluşturmak için kullanılan kayıtlar.",
+      icon: <BookOpen className="h-4 w-4" aria-hidden="true" />,
+      tone: "neutral" as const,
+    },
+    {
+      label: "Toplam Şube",
+      value: String(data.totalSections),
+      trend: "Kurum kapsamı",
+      description: "Öğretmen ve öğrenci kayıtlarının bağlandığı gruplar.",
+      icon: <BookOpen className="h-4 w-4" aria-hidden="true" />,
+      tone: "neutral" as const,
+    },
+    {
+      label: "Toplam Oda",
+      value: String(data.totalRooms),
+      trend: "Konum kapsamı",
+      description: "Geofence için kullanılabilen sınıf/oda kayıtları.",
+      icon: <DoorOpen className="h-4 w-4" aria-hidden="true" />,
+      tone: "success" as const,
+    },
+    {
+      label: "Son Oluşturulan Yoklamalar",
+      value: String(data.recentSessions.length),
+      trend: `${data.totalSessions} toplam`,
+      description: "En son oluşturulan yoklama oturumları.",
+      icon: <CalendarDays className="h-4 w-4" aria-hidden="true" />,
       tone: "info" as const,
     },
   ];
@@ -144,7 +175,7 @@ export default async function AdminDashboardPage() {
         </ButtonLink>
       </PageHeader>
 
-      <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
+      <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-7">
         {overviewStats.map((stat) => (
           <StatCard key={stat.label} {...stat} />
         ))}
@@ -152,8 +183,8 @@ export default async function AdminDashboardPage() {
 
       <section className="grid gap-6 xl:grid-cols-[1.35fr_0.65fr]">
         <SectionCard
-          title="Yaklaşan Oturumlar"
-          description="Aktif kurum için sıradaki planlı oturumlar."
+          title="Son Oluşturulan Yoklamalar"
+          description="Aktif kurumda en son açılan yoklama oturumları."
           actions={
             <ButtonLink
               href={routes.admin.sessions}
@@ -164,41 +195,57 @@ export default async function AdminDashboardPage() {
             </ButtonLink>
           }
         >
-          {data.upcomingSessions.length > 0 ? (
-            <div className="divide-y divide-neutral-100">
-              {data.upcomingSessions.map((session) => (
-                <div
-                  key={session.id}
-                  className="grid gap-3 py-4 first:pt-0 last:pb-0 md:grid-cols-[1fr_170px_150px_120px] md:items-center"
-                >
-                  <div>
-                    <p className="font-medium text-neutral-950">
-                      {session.title}
-                    </p>
-                    <p className="mt-1 text-sm text-neutral-500">
-                      {session.section.course.code} · {session.section.name}
-                    </p>
-                  </div>
-                  <p className="text-sm text-neutral-600">
-                    {formatDateTime(session.startTime)}
-                  </p>
-                  <p className="text-sm text-neutral-600">
-                    {session.room?.name ?? "Oda yok"}
-                  </p>
-                  <StatusBadge
-                    label={formatStatus(session.status)}
-                    tone={getSessionTone(session.status)}
-                  />
-                </div>
-              ))}
+          {data.recentSessions.length > 0 ? (
+            <div className="overflow-hidden rounded-lg border border-neutral-200">
+              <table className="w-full border-collapse text-left text-sm">
+                <thead className="bg-neutral-50 text-xs font-medium uppercase tracking-normal text-neutral-500">
+                  <tr>
+                    <th className="px-4 py-3">Yoklama</th>
+                    <th className="px-4 py-3">Ders/Şube</th>
+                    <th className="px-4 py-3">Başlangıç</th>
+                    <th className="px-4 py-3">Durum</th>
+                    <th className="px-4 py-3">Kayıt</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-neutral-100 bg-white">
+                  {data.recentSessions.map((session) => (
+                    <tr key={session.id}>
+                      <td className="px-4 py-4">
+                        <p className="font-medium text-neutral-950">
+                          {session.title}
+                        </p>
+                        <p className="mt-1 text-xs text-neutral-500">
+                          {session.room?.name ?? "Oda seçilmedi"}
+                        </p>
+                      </td>
+                      <td className="px-4 py-4 text-neutral-600">
+                        {session.section.course.code} ·{" "}
+                        {session.section.code ?? session.section.name}
+                      </td>
+                      <td className="px-4 py-4 text-neutral-600">
+                        {formatDateTime(session.startTime)}
+                      </td>
+                      <td className="px-4 py-4">
+                        <StatusBadge
+                          label={formatStatus(session.status)}
+                          tone={getSessionTone(session.status)}
+                        />
+                      </td>
+                      <td className="px-4 py-4 text-neutral-600">
+                        {session._count.attendanceRecords} kayıt
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           ) : (
             <EmptyState
-              title="Yaklaşan oturum yok"
-              description="Gelecek yoklama oturumları oluşturulduktan sonra burada görünecek."
+              title="Yoklama oturumu bulunmuyor"
+              description="İlk yoklama oturumunu oluşturup QR akışını hemen deneyebilirsiniz."
               icon={<CalendarDays className="h-5 w-5" aria-hidden="true" />}
               actionHref={routes.admin.sessionCreate}
-              actionLabel="Oturum oluştur"
+              actionLabel="Yoklama Oturumu Oluştur"
             />
           )}
         </SectionCard>
@@ -220,6 +267,8 @@ export default async function AdminDashboardPage() {
               title="İnceleme bekleyen kayıt yok"
               description="Reddedilen ve manuel yoklama kayıtları oluştuğunda burada görünecek."
               icon={<CheckCircle2 className="h-5 w-5" aria-hidden="true" />}
+              actionHref={routes.admin.reports}
+              actionLabel="Raporları Aç"
             />
           )}
         </SectionCard>
