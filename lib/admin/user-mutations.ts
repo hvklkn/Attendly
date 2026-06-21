@@ -13,6 +13,8 @@ import type {
   AdminCreatableUserRole,
   AdminCreateUserFormErrors,
   ValidAdminCreateUserInput,
+  AdminEditUserFormErrors,
+  ValidAdminEditUserInput,
 } from "@/lib/admin/user-create";
 
 const ADMIN_CREATABLE_ROLES = new Set<AdminCreatableUserRole>([
@@ -33,6 +35,28 @@ export type CreateAdminManagedUserResult =
       ok: false;
       message: string;
       errors?: AdminCreateUserFormErrors;
+    };
+
+export type SetAdminEnrollmentStatusResult =
+  | {
+      ok: true;
+      enrollmentId: string;
+    }
+  | {
+      ok: false;
+      message: string;
+    };
+
+export type UpdateAdminManagedUserResult =
+  | {
+      ok: true;
+      membershipId: string;
+      userId: string;
+    }
+  | {
+      ok: false;
+      message: string;
+      errors?: AdminEditUserFormErrors;
     };
 
 function isUniqueConstraintError(error: unknown) {
@@ -319,6 +343,224 @@ export async function createAdminManagedUser(
     return {
       ok: false,
       message: "Kullanıcı şu anda oluşturulamadı. Lütfen tekrar deneyin.",
+    };
+  }
+}
+
+export async function updateAdminManagedUser(
+  authContext: AdminAuthContext,
+  membershipId: string,
+  input: ValidAdminEditUserInput,
+): Promise<UpdateAdminManagedUserResult> {
+  if (
+    authContext.role !== MembershipRole.ORG_ADMIN &&
+    authContext.role !== MembershipRole.SUPER_ADMIN
+  ) {
+    return {
+      ok: false,
+      message: "Bu işlem için kurum yöneticisi yetkisi gerekir.",
+    };
+  }
+
+  const organizationId = getAdminOrganizationId(authContext);
+  const normalizedMembershipId = membershipId.trim();
+
+  if (!normalizedMembershipId) {
+    return {
+      ok: false,
+      message: "Düzenlenecek kullanıcı seçilmelidir.",
+    };
+  }
+
+  try {
+    return await db.$transaction(async (tx) => {
+      const membership = await tx.membership.findFirst({
+        where: {
+          id: normalizedMembershipId,
+          organizationId,
+        },
+        select: {
+          id: true,
+          userId: true,
+          role: true,
+        },
+      });
+
+      if (!membership) {
+        return {
+          ok: false,
+          message: "Kullanıcı kurumunuzda bulunamadı.",
+        };
+      }
+
+      const updatedUser = await tx.user.update({
+        where: {
+          id: membership.userId,
+        },
+        data: {
+          name: input.name,
+          email: input.email,
+          status: input.status,
+        },
+        select: {
+          id: true,
+        },
+      });
+
+      await tx.membership.update({
+        where: {
+          id_organizationId: {
+            id: membership.id,
+            organizationId,
+          },
+        },
+        data: {
+          studentNo:
+            membership.role === MembershipRole.STUDENT
+              ? input.studentNo
+              : undefined,
+        },
+        select: {
+          id: true,
+        },
+      });
+
+      await tx.auditLog.create({
+        data: {
+          organizationId,
+          actorUserId: authContext.user.id,
+          action:
+            input.status === UserStatus.ACTIVE
+              ? "user.updated"
+              : "user.deactivated",
+          targetType: "User",
+          targetId: updatedUser.id,
+          metadata: {
+            membershipId: membership.id,
+            role: membership.role,
+            status: input.status,
+          },
+        },
+      });
+
+      return {
+        ok: true,
+        membershipId: membership.id,
+        userId: updatedUser.id,
+      };
+    });
+  } catch (error) {
+    if (isUniqueConstraintError(error)) {
+      return {
+        ok: false,
+        message: "Bu e-posta adresi başka bir kullanıcıda kayıtlı.",
+        errors: {
+          email: "Bu e-posta adresi başka bir kullanıcıda kayıtlı.",
+        },
+      };
+    }
+
+    return {
+      ok: false,
+      message: "Kullanıcı şu anda güncellenemedi. Lütfen tekrar deneyin.",
+    };
+  }
+}
+
+export async function setAdminStudentEnrollmentStatus(
+  authContext: AdminAuthContext,
+  enrollmentId: string,
+  status: Extract<EnrollmentStatus, "ACTIVE" | "INACTIVE">,
+): Promise<SetAdminEnrollmentStatusResult> {
+  if (
+    authContext.role !== MembershipRole.ORG_ADMIN &&
+    authContext.role !== MembershipRole.SUPER_ADMIN
+  ) {
+    return {
+      ok: false,
+      message: "Bu işlem için kurum yöneticisi yetkisi gerekir.",
+    };
+  }
+
+  const organizationId = getAdminOrganizationId(authContext);
+  const normalizedEnrollmentId = enrollmentId.trim();
+
+  if (!normalizedEnrollmentId) {
+    return {
+      ok: false,
+      message: "Güncellenecek kayıt seçilmelidir.",
+    };
+  }
+
+  try {
+    const enrollment = await db.enrollment.findFirst({
+      where: {
+        id: normalizedEnrollmentId,
+        organizationId,
+      },
+      select: {
+        id: true,
+        status: true,
+        sectionId: true,
+        studentMembershipId: true,
+      },
+    });
+
+    if (!enrollment) {
+      return {
+        ok: false,
+        message: "Kayıt bulunamadı.",
+      };
+    }
+
+    if (enrollment.status === status) {
+      return {
+        ok: true,
+        enrollmentId: enrollment.id,
+      };
+    }
+
+    const updatedEnrollment = await db.enrollment.update({
+      where: {
+        id_organizationId: {
+          id: enrollment.id,
+          organizationId,
+        },
+      },
+      data: {
+        status,
+        endedAt: status === EnrollmentStatus.INACTIVE ? new Date() : null,
+      },
+      select: {
+        id: true,
+      },
+    });
+
+    await db.auditLog.create({
+      data: {
+        organizationId,
+        actorUserId: authContext.user.id,
+        action:
+          status === EnrollmentStatus.ACTIVE
+            ? "enrollment.reactivated"
+            : "enrollment.deactivated",
+        targetType: "Enrollment",
+        targetId: updatedEnrollment.id,
+        metadata: {
+          sectionId: enrollment.sectionId,
+          studentMembershipId: enrollment.studentMembershipId,
+        },
+      },
+    });
+
+    return {
+      ok: true,
+      enrollmentId: updatedEnrollment.id,
+    };
+  } catch {
+    return {
+      ok: false,
+      message: "Öğrenci kaydı şu anda güncellenemedi.",
     };
   }
 }

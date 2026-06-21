@@ -6,7 +6,10 @@ import type {
 } from "@/lib/generated/prisma/client";
 import type { MembershipRole } from "@/lib/generated/prisma/enums";
 
-export type AuthUser = Pick<User, "id" | "email" | "name" | "status">;
+export type AuthUser = Pick<
+  User,
+  "id" | "email" | "name" | "status" | "mustChangePassword"
+>;
 
 export type AuthOrganization = Pick<
   Organization,

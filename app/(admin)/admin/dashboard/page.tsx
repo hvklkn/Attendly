@@ -96,6 +96,36 @@ function getSessionTone(status: string) {
   return "info" as const;
 }
 
+function getAuditActionLabel(action: string) {
+  const labels: Record<string, string> = {
+    "user.created": "Kullanıcı oluşturuldu",
+    "membership.created": "Üyelik oluşturuldu",
+    "enrollment.created": "Şube kaydı oluşturuldu",
+    "enrollment.assigned": "Öğrenci şubeye atandı",
+    "enrollment.reactivated": "Şube kaydı aktif edildi",
+    "enrollment.deactivated": "Şube kaydı pasifleştirildi",
+    "student_import.completed": "CSV öğrenci aktarımı tamamlandı",
+    "student_import.user_created": "CSV ile öğrenci oluşturuldu",
+    "student_import.membership_created": "CSV ile öğrenci üyeliği oluşturuldu",
+    "student_import.enrollment_created": "CSV ile şube kaydı oluşturuldu",
+    "student_import.enrollment_reactivated": "CSV ile şube kaydı aktif edildi",
+  };
+
+  return labels[action] ?? action.replaceAll("_", " ").replaceAll(".", " ");
+}
+
+function getTargetTypeLabel(targetType: string) {
+  const labels: Record<string, string> = {
+    User: "Kullanıcı",
+    Membership: "Üyelik",
+    Enrollment: "Şube kaydı",
+    AttendanceSession: "Yoklama oturumu",
+    StudentImport: "Öğrenci aktarımı",
+  };
+
+  return labels[targetType] ?? targetType;
+}
+
 export default async function AdminDashboardPage() {
   const authContext = await requireAdminAuthContext();
   const data = await getAdminDashboardData(authContext);
@@ -175,7 +205,7 @@ export default async function AdminDashboardPage() {
         </ButtonLink>
       </PageHeader>
 
-      <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-7">
+      <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
         {overviewStats.map((stat) => (
           <StatCard key={stat.label} {...stat} />
         ))}
@@ -196,8 +226,8 @@ export default async function AdminDashboardPage() {
           }
         >
           {data.recentSessions.length > 0 ? (
-            <div className="overflow-hidden rounded-lg border border-neutral-200">
-              <table className="w-full border-collapse text-left text-sm">
+            <div className="overflow-x-auto rounded-lg border border-neutral-200">
+              <table className="w-full min-w-[760px] border-collapse text-left text-sm">
                 <thead className="bg-neutral-50 text-xs font-medium uppercase tracking-normal text-neutral-500">
                   <tr>
                     <th className="px-4 py-3">Yoklama</th>
@@ -314,10 +344,10 @@ export default async function AdminDashboardPage() {
                   </div>
                   <div>
                     <p className="text-sm font-medium text-neutral-900">
-                      {item.action}
+                      {getAuditActionLabel(item.action)}
                     </p>
                     <p className="mt-1 text-xs text-neutral-500">
-                      {item.targetType}
+                      {getTargetTypeLabel(item.targetType)}
                       {item.targetId ? ` · ${item.targetId}` : ""} ·{" "}
                       {formatDateTime(item.createdAt)}
                     </p>

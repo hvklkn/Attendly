@@ -2,7 +2,14 @@
 
 import { useActionState, useMemo, useState } from "react";
 import { useFormStatus } from "react-dom";
-import { BookOpen, CalendarClock, ClipboardCheck, MapPin } from "lucide-react";
+import {
+  AlertTriangle,
+  BookOpen,
+  CalendarClock,
+  CheckCircle2,
+  ClipboardCheck,
+  MapPin,
+} from "lucide-react";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { StatusBadge } from "@/components/ui/StatusBadge";
@@ -103,6 +110,41 @@ function formatSectionLabel(
   return `${sectionCode} (${section._count.enrollments} öğrenci)`;
 }
 
+function hasCoordinateValue(value: string) {
+  return value.trim().length > 0;
+}
+
+function StepIndicator({
+  number,
+  title,
+  description,
+  icon,
+}: {
+  number: number;
+  title: string;
+  description: string;
+  icon: React.ReactNode;
+}) {
+  return (
+    <div className="rounded-lg border border-neutral-200 bg-white p-4 shadow-subtle">
+      <div className="flex items-start gap-3">
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-neutral-950 text-sm font-semibold text-white">
+          {number}
+        </div>
+        <div className="min-w-0">
+          <div className="flex items-center gap-2">
+            <span className="text-neutral-500">{icon}</span>
+            <p className="font-semibold text-neutral-950">{title}</p>
+          </div>
+          <p className="mt-1 text-sm leading-6 text-neutral-600">
+            {description}
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function InstructorCreateSessionForm({
   options,
   defaultValues,
@@ -130,7 +172,8 @@ export function InstructorCreateSessionForm({
     accuracyMeters: values.geofenceAccuracyMeters,
   });
   const [locationMessage, setLocationMessage] = useState<string | null>(
-    values.geofenceLatitude && values.geofenceLongitude
+    hasCoordinateValue(values.geofenceLatitude) &&
+      hasCoordinateValue(values.geofenceLongitude)
       ? `Konum alındı: ${values.geofenceLatitude}, ${values.geofenceLongitude}, doğruluk: ${values.geofenceAccuracyMeters || "belirtilmedi"} metre`
       : null,
   );
@@ -142,6 +185,14 @@ export function InstructorCreateSessionForm({
     null;
   const selectedRoom =
     options.rooms.find((room) => room.id === selectedRoomId) ?? null;
+  const locationAccuracyNumber = Number(geofenceLocation.accuracyMeters);
+  const hasCapturedLocation =
+    hasCoordinateValue(geofenceLocation.latitude) &&
+    hasCoordinateValue(geofenceLocation.longitude);
+  const hasLowCapturedAccuracy =
+    hasCapturedLocation &&
+    Number.isFinite(locationAccuracyNumber) &&
+    locationAccuracyNumber > 100;
   const geofenceError =
     getFieldError(errors, "geofenceLatitude") ??
     getFieldError(errors, "geofenceLongitude") ??
@@ -200,7 +251,7 @@ export function InstructorCreateSessionForm({
       >
         <EmptyState
           title="Atanmış ders grubunuz yok"
-          description="Kurum yöneticiniz sizi bir ders grubuna atadığında burada yeni yoklama oluşturabilirsiniz."
+          description="Size atanmış aktif bir şube bulunmuyor. Lütfen yöneticinizden şube ataması yapmasını isteyin."
           icon={<BookOpen className="h-5 w-5" aria-hidden="true" />}
           className="min-h-56"
         />
@@ -218,6 +269,33 @@ export function InstructorCreateSessionForm({
           {state.message}
         </div>
       ) : null}
+
+      <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+        <StepIndicator
+          number={1}
+          title="Ders/şube seç"
+          description="Aktif öğrenci sayısını kontrol edin."
+          icon={<BookOpen className="h-4 w-4" aria-hidden="true" />}
+        />
+        <StepIndicator
+          number={2}
+          title="Konum belirle"
+          description="Mevcut konum veya oda koordinatı kullanılır."
+          icon={<MapPin className="h-4 w-4" aria-hidden="true" />}
+        />
+        <StepIndicator
+          number={3}
+          title="Zaman ve radius"
+          description="Yoklama süresini ve alan yarıçapını ayarlayın."
+          icon={<CalendarClock className="h-4 w-4" aria-hidden="true" />}
+        />
+        <StepIndicator
+          number={4}
+          title="Oturumu oluştur"
+          description="QR paneline geçip canlı takibi başlatın."
+          icon={<ClipboardCheck className="h-4 w-4" aria-hidden="true" />}
+        />
+      </section>
 
       <SectionCard
         title="Oturum Bilgileri"
@@ -452,14 +530,32 @@ export function InstructorCreateSessionForm({
             </button>
 
             {locationMessage ? (
-              <p className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
-                {locationMessage}
-              </p>
+              <div className="grid gap-2 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-3 text-sm text-emerald-800">
+                <div className="flex items-center gap-2 font-medium">
+                  <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
+                  <span>Konum başarıyla alındı</span>
+                  <StatusBadge label="Oturum konumu" tone="success" />
+                </div>
+                <p>{locationMessage}</p>
+              </div>
             ) : (
               <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
                 Konum alınmadı, oda konumu kullanılacak.
               </p>
             )}
+
+            {hasLowCapturedAccuracy ? (
+              <div className="flex items-start gap-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-3 text-sm leading-6 text-amber-900">
+                <AlertTriangle
+                  className="mt-0.5 h-4 w-4 shrink-0 text-amber-700"
+                  aria-hidden="true"
+                />
+                <p>
+                  Konum doğruluğu düşük görünüyor. Daha iyi GPS doğruluğu için
+                  pencereye yaklaşın veya tekrar konum alın.
+                </p>
+              </div>
+            ) : null}
 
             {locationError ? (
               <p className="rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">

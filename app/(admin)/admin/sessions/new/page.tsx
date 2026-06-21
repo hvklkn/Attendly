@@ -16,7 +16,7 @@ export default async function AdminCreateSessionPage() {
       <PageHeader
         eyebrow={authContext.activeOrganization.name}
         title="Yoklama Oturumu Oluştur"
-        description="Kurum kapsamındaki ders, ders grubu, oda ve sorumlu kişi bilgileriyle yeni yoklama oturumu hazırlayın."
+        description="Kurum kapsamındaki ders, ders grubu, oda ve öğretmen atamasıyla yeni yoklama oturumu hazırlayın."
       >
         <ButtonLink
           href={routes.admin.sessions}

@@ -89,8 +89,8 @@ export default async function StudentAttendancePage() {
         description="Son yoklama kayıtlarınız, durumunuz ve konum mesafeniz."
       >
         {records.length > 0 ? (
-          <div className="overflow-hidden rounded-lg border border-neutral-200">
-            <table className="w-full border-collapse text-left text-sm">
+          <div className="overflow-x-auto rounded-lg border border-neutral-200">
+            <table className="w-full min-w-[760px] border-collapse text-left text-sm">
               <thead className="bg-neutral-50 text-xs font-medium uppercase tracking-normal text-neutral-500">
                 <tr>
                   <th className="px-4 py-3">Ders/Şube</th>

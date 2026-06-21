@@ -37,6 +37,37 @@ export type AdminCreateUserActionState = {
   errors: AdminCreateUserFormErrors;
 };
 
+export type AdminEditUserFormField =
+  | "name"
+  | "email"
+  | "studentNo"
+  | "isActive";
+
+export type AdminEditUserFormValues = {
+  name: string;
+  email: string;
+  studentNo: string;
+  isActive: string;
+};
+
+export type AdminEditUserFormErrors = Partial<
+  Record<AdminEditUserFormField, string>
+>;
+
+export type AdminEditUserActionState = {
+  status: "idle" | "error";
+  message: string | null;
+  values: AdminEditUserFormValues;
+  errors: AdminEditUserFormErrors;
+};
+
+export type ValidAdminEditUserInput = {
+  name: string;
+  email: string;
+  studentNo: string | null;
+  status: Extract<UserStatus, "ACTIVE" | "SUSPENDED">;
+};
+
 export type ValidAdminCreateUserInput = {
   name: string;
   email: string;
@@ -80,6 +111,18 @@ export const initialAdminCreateUserActionState: AdminCreateUserActionState = {
   status: "idle",
   message: null,
   values: initialAdminCreateUserFormValues,
+  errors: {},
+};
+
+export const initialAdminEditUserActionState: AdminEditUserActionState = {
+  status: "idle",
+  message: null,
+  values: {
+    name: "",
+    email: "",
+    studentNo: "",
+    isActive: "on",
+  },
   errors: {},
 };
 
@@ -185,6 +228,72 @@ export function validateAdminCreateUserFormValues(
       password,
       status: isActive ? "ACTIVE" : "INVITED",
       sectionIds: role === "STUDENT" ? sectionIds : [],
+    },
+  };
+}
+
+export function getAdminEditUserFormValues(
+  formData: FormData,
+): AdminEditUserFormValues {
+  return {
+    name: String(formData.get("name") ?? ""),
+    email: String(formData.get("email") ?? ""),
+    studentNo: String(formData.get("studentNo") ?? ""),
+    isActive: formData.get("isActive") === "on" ? "on" : "",
+  };
+}
+
+export function validateAdminEditUserFormValues(
+  values: AdminEditUserFormValues,
+):
+  | {
+      ok: true;
+      values: AdminEditUserFormValues;
+      data: ValidAdminEditUserInput;
+    }
+  | {
+      ok: false;
+      values: AdminEditUserFormValues;
+      errors: AdminEditUserFormErrors;
+    } {
+  const name = normalizeText(values.name);
+  const email = values.email.trim().toLowerCase();
+  const studentNo = normalizeText(values.studentNo);
+  const isActive = values.isActive === "on" ? "on" : "";
+  const normalizedValues: AdminEditUserFormValues = {
+    name,
+    email,
+    studentNo,
+    isActive,
+  };
+  const errors: AdminEditUserFormErrors = {};
+
+  if (!name) {
+    errors.name = "Ad soyad zorunludur.";
+  }
+
+  if (!email) {
+    errors.email = "E-posta zorunludur.";
+  } else if (!isEmailValid(email)) {
+    errors.email = "Geçerli bir e-posta adresi girin.";
+  }
+
+  if (Object.keys(errors).length > 0) {
+    return {
+      ok: false,
+      values: normalizedValues,
+      errors,
+    };
+  }
+
+  return {
+    ok: true,
+    values: normalizedValues,
+    data: {
+      name,
+      email,
+      studentNo: studentNo || null,
+      status: isActive ? "ACTIVE" : "SUSPENDED",
     },
   };
 }

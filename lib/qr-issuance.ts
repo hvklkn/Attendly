@@ -1,6 +1,10 @@
 import "server-only";
 
 import { db } from "@/lib/db";
+import {
+  AttendanceAlertSeverity,
+  AttendanceAlertType,
+} from "@/lib/generated/prisma/enums";
 import { canIssueQrTokenForSessionStatus } from "@/lib/qr-ui";
 import {
   createQrScanUrl,
@@ -61,7 +65,13 @@ export async function issueAttendanceSessionQrToken(
           ? {
               section: {
                 is: {
-                  instructorMembershipId: input.instructorMembershipId,
+                  instructorAssignments: {
+                    some: {
+                      organizationId: input.organizationId,
+                      instructorMembershipId: input.instructorMembershipId,
+                      isActive: true,
+                    },
+                  },
                 },
               },
             }
@@ -93,36 +103,55 @@ export async function issueAttendanceSessionQrToken(
     const createdAt = new Date();
     const expiresAt = getQrTokenExpiresAt(createdAt);
 
-    const [revokedPreviousTokens, qrToken] = await db.$transaction([
-      db.qRToken.updateMany({
-        where: {
-          organizationId: input.organizationId,
-          attendanceSessionId: attendanceSession.id,
-          revokedAt: null,
-          expiresAt: {
-            gt: createdAt,
+    const { revokedPreviousTokens, qrToken } = await db.$transaction(
+      async (tx) => {
+        const revokedPreviousTokens = await tx.qRToken.updateMany({
+          where: {
+            organizationId: input.organizationId,
+            attendanceSessionId: attendanceSession.id,
+            revokedAt: null,
+            expiresAt: {
+              gt: createdAt,
+            },
           },
-        },
-        data: {
-          revokedAt: createdAt,
-        },
-      }),
-      db.qRToken.create({
-        data: {
-          organizationId: input.organizationId,
-          attendanceSessionId: attendanceSession.id,
-          createdByMembershipId: authContext.membership.id,
-          tokenHash,
-          expiresAt,
-          createdAt,
-        },
-        select: {
-          id: true,
-          expiresAt: true,
-          createdAt: true,
-        },
-      }),
-    ]);
+          data: {
+            revokedAt: createdAt,
+          },
+        });
+        const qrToken = await tx.qRToken.create({
+          data: {
+            organizationId: input.organizationId,
+            attendanceSessionId: attendanceSession.id,
+            createdByMembershipId: authContext.membership.id,
+            tokenHash,
+            expiresAt,
+            createdAt,
+          },
+          select: {
+            id: true,
+            expiresAt: true,
+            createdAt: true,
+          },
+        });
+
+        if (revokedPreviousTokens.count > 0) {
+          await tx.attendanceAlert.create({
+            data: {
+              organizationId: input.organizationId,
+              attendanceSessionId: attendanceSession.id,
+              alertType: AttendanceAlertType.TOKEN_REPLACED_BY_NEW_QR,
+              severity: AttendanceAlertSeverity.LOW,
+              message: `${revokedPreviousTokens.count} eski aktif QR token yeni QR üretimi nedeniyle iptal edildi.`,
+            },
+          });
+        }
+
+        return {
+          revokedPreviousTokens,
+          qrToken,
+        };
+      },
+    );
 
     return {
       ok: true,

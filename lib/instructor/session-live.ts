@@ -51,6 +51,7 @@ export type InstructorSessionLiveReportRow = {
   distance: string;
   locationVerification: string;
   locationVerificationTone: StatusTone;
+  securityReason: string;
   rejectionReason: string | null;
   recordStatus: string | null;
 };
@@ -210,7 +211,10 @@ function canReadLiveSession(
   session: {
     organizationId: string;
     section: {
-      instructorMembershipId: string | null;
+      instructorAssignments: Array<{
+        instructorMembershipId: string;
+        isActive: boolean;
+      }>;
     };
   },
 ) {
@@ -227,7 +231,11 @@ function canReadLiveSession(
 
   return (
     authScope.role === MembershipRole.INSTRUCTOR &&
-    session.section.instructorMembershipId === authScope.membershipId
+    session.section.instructorAssignments.some(
+      (assignment) =>
+        assignment.isActive &&
+        assignment.instructorMembershipId === authScope.membershipId,
+    )
   );
 }
 
@@ -265,7 +273,16 @@ export async function getInstructorSessionLiveData(
             id: true,
             name: true,
             code: true,
-            instructorMembershipId: true,
+            instructorAssignments: {
+              where: {
+                organizationId,
+                isActive: true,
+              },
+              select: {
+                instructorMembershipId: true,
+                isActive: true,
+              },
+            },
             course: {
               select: {
                 code: true,
@@ -284,6 +301,7 @@ export async function getInstructorSessionLiveData(
                       select: {
                         name: true,
                         email: true,
+                        id: true,
                       },
                     },
                   },
@@ -341,6 +359,7 @@ export async function getInstructorSessionLiveData(
               select: {
                 name: true,
                 email: true,
+                id: true,
               },
             },
           },
@@ -391,11 +410,31 @@ export async function getInstructorSessionLiveData(
         "tr",
       ),
   );
+  const latestAlertByStudentUserId = new Map<
+    string,
+    {
+      alertType: string;
+      message: string;
+    }
+  >();
+
+  for (const alert of session.attendanceAlerts) {
+    if (alert.studentUser?.id && !latestAlertByStudentUserId.has(alert.studentUser.id)) {
+      latestAlertByStudentUserId.set(alert.studentUser.id, {
+        alertType: alert.alertType,
+        message: alert.message,
+      });
+    }
+  }
+
   const reportRows = activeEnrollments.map((enrollment) => {
     const record = enrollment.attendanceRecords[0] ?? null;
     const latestPresenceCheck = record?.presenceChecks[0] ?? null;
     const studentName =
       enrollment.studentMembership.user.name ?? "İsimsiz öğrenci";
+    const latestSecurityAlert = latestAlertByStudentUserId.get(
+      enrollment.studentMembership.user.id,
+    );
     const statusLabel = record
       ? getAttendanceRecordStatusLabel(record.status)
       : "Katılmadı";
@@ -419,6 +458,11 @@ export async function getInstructorSessionLiveData(
       checkedInAt,
       distance,
       locationVerification,
+      securityReason: latestSecurityAlert
+        ? `${getAttendanceAlertTypeLabel(latestSecurityAlert.alertType)} - ${latestSecurityAlert.message}`
+        : record?.rejectionReason
+          ? record.rejectionReason
+          : "Yok",
       rejectionReason: record?.rejectionReason ?? null,
       locationVerificationTone: record
         ? getLocationVerificationTone(latestPresenceCheck?.status, record.status)
@@ -514,7 +558,7 @@ export async function getInstructorSessionLiveData(
     securityAlerts: session.attendanceAlerts.map((alert) => ({
       id: alert.id,
       studentName: alert.studentUser?.name ?? "Bilinmeyen öğrenci",
-      email: alert.studentUser?.email ?? "Email yok",
+      email: alert.studentUser?.email ?? "E-posta yok",
       eventType: getAttendanceAlertTypeLabel(alert.alertType),
       message: alert.message,
       createdAt: formatDateTimeTr(alert.createdAt),

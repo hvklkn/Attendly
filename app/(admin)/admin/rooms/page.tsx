@@ -1,10 +1,14 @@
-import { MapPin, Plus, Search } from "lucide-react";
+import { MapPin, Pencil, Plus, Search } from "lucide-react";
 import { ButtonLink } from "@/components/ui/ButtonLink";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { routes } from "@/constants/routes";
+import {
+  deactivateAdminRoomAction,
+  reactivateAdminRoomAction,
+} from "@/lib/admin/room-actions";
 import { requireAdminAuthContext } from "@/lib/admin/auth";
 import { getAdminRoomsData } from "@/lib/admin/queries";
 
@@ -12,6 +16,10 @@ type AdminRoomsPageProps = {
   searchParams?: Promise<{
     q?: string | string[];
     created?: string | string[];
+    updated?: string | string[];
+    deactivated?: string | string[];
+    reactivated?: string | string[];
+    error?: string | string[];
   }>;
 };
 
@@ -41,6 +49,12 @@ export default async function AdminRoomsPage({
   const resolvedSearchParams = await searchParams;
   const query = getSearchValue(resolvedSearchParams?.q).trim();
   const created = getSearchValue(resolvedSearchParams?.created) === "1";
+  const updated = getSearchValue(resolvedSearchParams?.updated) === "1";
+  const deactivated =
+    getSearchValue(resolvedSearchParams?.deactivated) === "1";
+  const reactivated =
+    getSearchValue(resolvedSearchParams?.reactivated) === "1";
+  const errorMessage = getSearchValue(resolvedSearchParams?.error);
   const rooms = await getAdminRoomsData(authContext, { query });
 
   return (
@@ -62,6 +76,16 @@ export default async function AdminRoomsPage({
       {created ? (
         <div className="rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-700">
           Oda oluşturuldu.
+        </div>
+      ) : null}
+      {updated || deactivated || reactivated ? (
+        <div className="rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-700">
+          Oda kaydı güncellendi.
+        </div>
+      ) : null}
+      {errorMessage ? (
+        <div className="rounded-md border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-700">
+          {errorMessage}
         </div>
       ) : null}
 
@@ -105,6 +129,7 @@ export default async function AdminRoomsPage({
                     <th className="px-4 py-3">Radius</th>
                     <th className="px-4 py-3">Oturum</th>
                     <th className="px-4 py-3">Durum</th>
+                    <th className="px-4 py-3">İşlem</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-neutral-100 bg-white">
@@ -140,6 +165,31 @@ export default async function AdminRoomsPage({
                           label={room.isActive ? "Aktif" : "Pasif"}
                           tone={room.isActive ? "success" : "neutral"}
                         />
+                      </td>
+                      <td className="px-4 py-4">
+                        <div className="flex flex-wrap gap-2">
+                          <ButtonLink
+                            href={`/admin/rooms/${room.id}/edit`}
+                            icon={<Pencil className="h-4 w-4" aria-hidden="true" />}
+                          >
+                            Düzenle
+                          </ButtonLink>
+                          <form
+                            action={
+                              room.isActive
+                                ? deactivateAdminRoomAction
+                                : reactivateAdminRoomAction
+                            }
+                          >
+                            <input type="hidden" name="roomId" value={room.id} />
+                            <button
+                              type="submit"
+                              className="inline-flex h-9 items-center justify-center rounded-md border border-neutral-300 bg-white px-3 text-sm font-medium text-neutral-700 transition hover:border-neutral-400 hover:text-neutral-950"
+                            >
+                              {room.isActive ? "Pasifleştir" : "Tekrar Aktifleştir"}
+                            </button>
+                          </form>
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -183,6 +233,29 @@ export default async function AdminRoomsPage({
                       </dd>
                     </div>
                   </dl>
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    <ButtonLink
+                      href={`/admin/rooms/${room.id}/edit`}
+                      icon={<Pencil className="h-4 w-4" aria-hidden="true" />}
+                    >
+                      Düzenle
+                    </ButtonLink>
+                    <form
+                      action={
+                        room.isActive
+                          ? deactivateAdminRoomAction
+                          : reactivateAdminRoomAction
+                      }
+                    >
+                      <input type="hidden" name="roomId" value={room.id} />
+                      <button
+                        type="submit"
+                        className="inline-flex h-9 items-center justify-center rounded-md border border-neutral-300 bg-white px-3 text-sm font-medium text-neutral-700 transition hover:border-neutral-400 hover:text-neutral-950"
+                      >
+                        {room.isActive ? "Pasifleştir" : "Tekrar Aktifleştir"}
+                      </button>
+                    </form>
+                  </div>
                 </article>
               ))}
             </div>

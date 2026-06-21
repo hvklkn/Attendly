@@ -1,4 +1,4 @@
-import { FileUp, Search, UserPlus, Users } from "lucide-react";
+import { FileUp, Pencil, Search, UserPlus, Users } from "lucide-react";
 import { ButtonLink } from "@/components/ui/ButtonLink";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { PageHeader } from "@/components/ui/PageHeader";
@@ -6,10 +6,18 @@ import { SectionCard } from "@/components/ui/SectionCard";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { routes } from "@/constants/routes";
 import { requireAdminAuthContext } from "@/lib/admin/auth";
-import { getAdminUsersData } from "@/lib/admin/queries";
-import { MembershipRole } from "@/lib/generated/prisma/enums";
+import {
+  getAdminUserCreateOptionsData,
+  getAdminUsersData,
+} from "@/lib/admin/queries";
+import {
+  deactivateAdminEnrollmentAction,
+  reactivateAdminEnrollmentAction,
+} from "@/lib/admin/user-actions";
+import { EnrollmentStatus, MembershipRole } from "@/lib/generated/prisma/enums";
 import {
   formatDateTr,
+  getEnrollmentStatusLabel,
   getRoleLabel,
   getUserStatusLabel,
 } from "@/lib/localization";
@@ -18,6 +26,12 @@ type AdminUsersPageProps = {
   searchParams?: Promise<{
     q?: string | string[];
     role?: string | string[];
+    sectionId?: string | string[];
+    enrollmentStatus?: string | string[];
+    deactivated?: string | string[];
+    reactivated?: string | string[];
+    updated?: string | string[];
+    enrollmentError?: string | string[];
   }>;
 };
 
@@ -60,8 +74,20 @@ function getRoleFilterValue(value: string | string[] | undefined) {
   return undefined;
 }
 
-function formatDate(date: Date) {
-  return formatDateTr(date);
+function getEnrollmentStatusFilter(value: string | string[] | undefined) {
+  const status = getSearchValue(value);
+
+  if (
+    status === EnrollmentStatus.ACTIVE ||
+    status === EnrollmentStatus.INACTIVE ||
+    status === EnrollmentStatus.COMPLETED ||
+    status === EnrollmentStatus.WITHDRAWN ||
+    status === EnrollmentStatus.SUSPENDED
+  ) {
+    return status;
+  }
+
+  return undefined;
 }
 
 function formatEnum(value: string) {
@@ -90,19 +116,118 @@ function getStatusTone(status: string) {
   return "neutral" as const;
 }
 
-function formatMembershipScope(membership: {
-  role: string;
+function getEnrollmentTone(status: string) {
+  if (status === "ACTIVE") return "success" as const;
+  if (status === "SUSPENDED") return "warning" as const;
+  if (status === "INACTIVE" || status === "WITHDRAWN") return "neutral" as const;
+  return "neutral" as const;
+}
+
+function formatSection(section: {
+  name: string;
+  code: string | null;
+  course: {
+    code: string;
+  };
+}) {
+  const sectionName = section.code
+    ? `${section.code} · ${section.name}`
+    : section.name;
+
+  return `${section.course.code} · ${sectionName}`;
+}
+
+function formatSectionOption(section: {
+  name: string;
+  code: string | null;
+  course: {
+    code: string;
+    title: string;
+  };
+  _count: {
+    enrollments: number;
+  };
+}) {
+  const sectionName = section.code ?? `${section.course.code}-${section.name}`;
+
+  return `${sectionName} (${section._count.enrollments} öğrenci)`;
+}
+
+function EnrollmentList({
+  enrollments,
+}: {
   enrollments: Array<{
+    id: string;
+    status: string;
+    enrolledAt: Date;
+    endedAt: Date | null;
     section: {
+      id: string;
       name: string;
       code: string | null;
       course: {
         code: string;
+        title: string;
       };
     };
   }>;
+}) {
+  if (enrollments.length === 0) {
+    return <span className="text-sm text-neutral-500">Ders grubu yok</span>;
+  }
+
+  return (
+    <div className="grid gap-2">
+      {enrollments.map((enrollment) => (
+        <div
+          key={enrollment.id}
+          className="rounded-md border border-neutral-200 bg-neutral-50 p-3"
+        >
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-sm font-medium text-neutral-950">
+              {formatSection(enrollment.section)}
+            </span>
+            <StatusBadge
+              label={getEnrollmentStatusLabel(enrollment.status)}
+              tone={getEnrollmentTone(enrollment.status)}
+            />
+          </div>
+          <div className="mt-2 flex flex-wrap items-center gap-3 text-xs text-neutral-500">
+            <span>Kayıt: {formatDateTr(enrollment.enrolledAt)}</span>
+            {enrollment.endedAt ? (
+              <span>Çıkış: {formatDateTr(enrollment.endedAt)}</span>
+            ) : null}
+          </div>
+          {enrollment.status === "ACTIVE" ? (
+            <form action={deactivateAdminEnrollmentAction} className="mt-3">
+              <input type="hidden" name="enrollmentId" value={enrollment.id} />
+              <button
+                type="submit"
+                className="inline-flex h-8 items-center justify-center rounded-md border border-neutral-300 bg-white px-3 text-xs font-medium text-neutral-700 transition hover:border-neutral-400 hover:text-neutral-950"
+              >
+                Pasifleştir
+              </button>
+            </form>
+          ) : enrollment.status === "INACTIVE" ? (
+            <form action={reactivateAdminEnrollmentAction} className="mt-3">
+              <input type="hidden" name="enrollmentId" value={enrollment.id} />
+              <button
+                type="submit"
+                className="inline-flex h-8 items-center justify-center rounded-md border border-neutral-300 bg-white px-3 text-xs font-medium text-neutral-700 transition hover:border-neutral-400 hover:text-neutral-950"
+              >
+                Tekrar Aktif Yap
+              </button>
+            </form>
+          ) : null}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function formatMembershipScope(membership: {
+  role: string;
   _count: {
-    enrollments: number;
     instructedSections: number;
   };
 }) {
@@ -114,26 +239,7 @@ function formatMembershipScope(membership: {
     return "Kurum kapsamı";
   }
 
-  if (membership.enrollments.length === 0) {
-    return "Ders grubu yok";
-  }
-
-  const visibleSections = membership.enrollments.map((enrollment) => {
-    const section = enrollment.section;
-    const sectionName = section.code
-      ? `${section.code}`
-      : section.name;
-
-    return `${section.course.code} · ${sectionName}`;
-  });
-  const remainingCount = Math.max(
-    membership._count.enrollments - visibleSections.length,
-    0,
-  );
-
-  return remainingCount > 0
-    ? `${visibleSections.join(", ")} +${remainingCount}`
-    : visibleSections.join(", ");
+  return "Ders grubu yok";
 }
 
 export default async function AdminUsersPage({
@@ -143,7 +249,27 @@ export default async function AdminUsersPage({
   const resolvedSearchParams = await searchParams;
   const query = getSearchValue(resolvedSearchParams?.q).trim();
   const role = getRoleFilterValue(resolvedSearchParams?.role);
-  const memberships = await getAdminUsersData(authContext, { query, role });
+  const sectionId = getSearchValue(resolvedSearchParams?.sectionId).trim();
+  const enrollmentStatus = getEnrollmentStatusFilter(
+    resolvedSearchParams?.enrollmentStatus,
+  );
+  const deactivated =
+    getSearchValue(resolvedSearchParams?.deactivated) === "1";
+  const reactivated =
+    getSearchValue(resolvedSearchParams?.reactivated) === "1";
+  const updated = getSearchValue(resolvedSearchParams?.updated) === "1";
+  const enrollmentError =
+    getSearchValue(resolvedSearchParams?.enrollmentError) === "1";
+  const [memberships, options] = await Promise.all([
+    getAdminUsersData(authContext, {
+      query,
+      role,
+      sectionId,
+      enrollmentStatus,
+    }),
+    getAdminUserCreateOptionsData(authContext),
+  ]);
+  const hasFilters = Boolean(query || role || sectionId || enrollmentStatus);
 
   return (
     <>
@@ -168,31 +294,57 @@ export default async function AdminUsersPage({
         </ButtonLink>
         <ButtonLink
           href={`${routes.admin.usersNew}?role=STUDENT`}
-          variant="primary"
+          variant="secondary"
           icon={<UserPlus className="h-4 w-4" aria-hidden="true" />}
         >
           Öğrenci Ekle
         </ButtonLink>
+        <ButtonLink
+          href={routes.admin.studentImport}
+          variant="primary"
+          icon={<FileUp className="h-4 w-4" aria-hidden="true" />}
+        >
+          CSV ile Yükle
+        </ButtonLink>
       </PageHeader>
+
+      {deactivated ? (
+        <div className="rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-700">
+          Öğrencinin şube kaydı pasifleştirildi.
+        </div>
+      ) : null}
+      {updated ? (
+        <div className="rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-700">
+          Kullanıcı bilgileri güncellendi.
+        </div>
+      ) : null}
+      {reactivated ? (
+        <div className="rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-700">
+          Öğrencinin şube kaydı tekrar aktif yapıldı.
+        </div>
+      ) : null}
+      {enrollmentError ? (
+        <div className="rounded-md border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-700">
+          Kayıt durumu güncellenemedi. Lütfen seçimi kontrol edin.
+        </div>
+      ) : null}
 
       <SectionCard
         title="Toplu Aktarım"
-        description="Öğrenci listesini CSV dosyasıyla toplu olarak aktarabileceksiniz."
+        description="CSV dosyasıyla çok sayıda öğrenciyi oluşturun ve şube koduyla şubelere atayın."
         actions={
-          <button
-            type="button"
-            disabled
-            className="inline-flex h-9 cursor-not-allowed items-center justify-center gap-2 rounded-md border border-neutral-200 bg-neutral-50 px-3 text-sm font-medium text-neutral-400"
+          <ButtonLink
+            href={routes.admin.studentImport}
+            variant="primary"
+            icon={<FileUp className="h-4 w-4" aria-hidden="true" />}
           >
-            <FileUp className="h-4 w-4" aria-hidden="true" />
             CSV ile Öğrenci Yükle
-          </button>
+          </ButtonLink>
         }
       >
         <p className="text-sm leading-6 text-neutral-600">
-          CSV aktarımı sonraki adımda eklenecek. Bu temel sayesinde öğrenciler
-          tek tek oluşturulabilir, toplu yükleme aynı üyelik kurallarını
-          kullanacak şekilde hazırlanabilir.
+          Önizlemede geçerli satır, hatalı satır, tekrarlanan e-posta ve
+          bulunamayan şube kodu değerleri gösterilir; onay vermeden veri yazılmaz.
         </p>
       </SectionCard>
 
@@ -202,7 +354,7 @@ export default async function AdminUsersPage({
       >
         <form
           action={routes.admin.users}
-          className="mb-5 grid gap-3 lg:grid-cols-[1fr_220px_120px]"
+          className="mb-5 grid gap-3 lg:grid-cols-[1fr_180px_220px_180px_120px]"
         >
           <label className="flex items-center gap-2 rounded-md border border-neutral-300 bg-white px-3 py-2 text-sm text-neutral-500">
             <Search className="h-4 w-4" aria-hidden="true" />
@@ -229,6 +381,36 @@ export default async function AdminUsersPage({
               ))}
             </select>
           </label>
+          <label>
+            <span className="sr-only">Şube</span>
+            <select
+              name="sectionId"
+              defaultValue={sectionId}
+              className="h-10 w-full rounded-md border border-neutral-300 bg-white px-3 text-sm text-neutral-700 outline-none transition focus:border-neutral-500"
+            >
+              <option value="">Tüm şubeler</option>
+              {options.sections.map((section) => (
+                <option key={section.id} value={section.id}>
+                  {formatSectionOption(section)}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            <span className="sr-only">Enrollment durumu</span>
+            <select
+              name="enrollmentStatus"
+              defaultValue={enrollmentStatus ?? ""}
+              className="h-10 w-full rounded-md border border-neutral-300 bg-white px-3 text-sm text-neutral-700 outline-none transition focus:border-neutral-500"
+            >
+              <option value="">Tüm kayıt durumları</option>
+              <option value={EnrollmentStatus.ACTIVE}>Aktif kayıt</option>
+              <option value={EnrollmentStatus.INACTIVE}>Pasif kayıt</option>
+              <option value={EnrollmentStatus.COMPLETED}>Tamamlandı</option>
+              <option value={EnrollmentStatus.WITHDRAWN}>Çekildi</option>
+              <option value={EnrollmentStatus.SUSPENDED}>Askıya alındı</option>
+            </select>
+          </label>
           <button
             type="submit"
             className="inline-flex h-10 items-center justify-center gap-2 rounded-md border border-neutral-300 bg-white px-3 text-sm font-medium text-neutral-700 transition hover:border-neutral-400 hover:text-neutral-950"
@@ -251,6 +433,7 @@ export default async function AdminUsersPage({
                     <th className="px-4 py-3">Durum</th>
                     <th className="px-4 py-3">Kurum</th>
                     <th className="px-4 py-3">Güncellendi</th>
+                    <th className="px-4 py-3">İşlem</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-neutral-100 bg-white">
@@ -268,6 +451,11 @@ export default async function AdminUsersPage({
                             <p className="font-medium text-neutral-950">
                               {membership.user.name ?? "İsimsiz kullanıcı"}
                             </p>
+                            {membership.studentNo ? (
+                              <p className="mt-1 text-xs text-neutral-500">
+                                Öğrenci No: {membership.studentNo}
+                              </p>
+                            ) : null}
                           </div>
                         </div>
                       </td>
@@ -281,7 +469,13 @@ export default async function AdminUsersPage({
                         />
                       </td>
                       <td className="px-4 py-4 text-neutral-600">
-                        {formatMembershipScope(membership)}
+                        {membership.role === MembershipRole.STUDENT ? (
+                          <EnrollmentList
+                            enrollments={membership.enrollments}
+                          />
+                        ) : (
+                          formatMembershipScope(membership)
+                        )}
                       </td>
                       <td className="px-4 py-4">
                         <StatusBadge
@@ -293,7 +487,15 @@ export default async function AdminUsersPage({
                         {membership.organization.name}
                       </td>
                       <td className="px-4 py-4 text-neutral-600">
-                        {formatDate(membership.updatedAt)}
+                        {formatDateTr(membership.updatedAt)}
+                      </td>
+                      <td className="px-4 py-4">
+                        <ButtonLink
+                          href={`/admin/users/${membership.id}/edit`}
+                          icon={<Pencil className="h-4 w-4" aria-hidden="true" />}
+                        >
+                          Düzenle
+                        </ButtonLink>
                       </td>
                     </tr>
                   ))}
@@ -321,6 +523,11 @@ export default async function AdminUsersPage({
                       <p className="mt-1 truncate text-sm text-neutral-500">
                         {membership.user.email}
                       </p>
+                      {membership.studentNo ? (
+                        <p className="mt-1 text-sm text-neutral-500">
+                          Öğrenci No: {membership.studentNo}
+                        </p>
+                      ) : null}
                       <div className="mt-3 flex flex-wrap gap-2">
                         <StatusBadge
                           label={formatEnum(membership.role)}
@@ -331,12 +538,31 @@ export default async function AdminUsersPage({
                           tone={getStatusTone(membership.user.status)}
                         />
                       </div>
+                      <div className="mt-4">
+                        <p className="mb-2 text-sm font-medium text-neutral-700">
+                          Ders Grupları
+                        </p>
+                        {membership.role === MembershipRole.STUDENT ? (
+                          <EnrollmentList
+                            enrollments={membership.enrollments}
+                          />
+                        ) : (
+                          <p className="text-sm text-neutral-500">
+                            {formatMembershipScope(membership)}
+                          </p>
+                        )}
+                      </div>
                       <p className="mt-3 text-xs text-neutral-500">
-                        {formatMembershipScope(membership)}
+                        Güncellendi {formatDateTr(membership.updatedAt)}
                       </p>
-                      <p className="mt-3 text-xs text-neutral-500">
-                        Güncellendi {formatDate(membership.updatedAt)}
-                      </p>
+                      <div className="mt-4">
+                        <ButtonLink
+                          href={`/admin/users/${membership.id}/edit`}
+                          icon={<Pencil className="h-4 w-4" aria-hidden="true" />}
+                        >
+                          Düzenle
+                        </ButtonLink>
+                      </div>
                     </div>
                   </div>
                 </article>
@@ -345,10 +571,14 @@ export default async function AdminUsersPage({
           </>
         ) : (
           <EmptyState
-            title={query ? "Aramanızla eşleşen kullanıcı yok" : "Bağlı kullanıcı yok"}
+            title={
+              hasFilters
+                ? "Filtrelerle eşleşen kullanıcı yok"
+                : "Bağlı kullanıcı yok"
+            }
             description={
-              query
-                ? "Farklı bir arama terimi deneyin veya aramayı temizleyin."
+              hasFilters
+                ? "Farklı bir arama terimi deneyin veya filtreleri temizleyin."
                 : "Kurum üyelik kayıtları oluşturulduğunda üyeler burada görünecek."
             }
             icon={<Users className="h-5 w-5" aria-hidden="true" />}

@@ -19,11 +19,44 @@ async function getCurrentRequestPath() {
   }
 }
 
+function getPasswordChangePath(role: MembershipRole) {
+  if (role === "SUPER_ADMIN" || role === "ORG_ADMIN") {
+    return "/admin/profile";
+  }
+
+  if (role === "INSTRUCTOR") {
+    return "/instructor/profile";
+  }
+
+  return "/student/profile";
+}
+
+function canStayOnCurrentPathWhilePasswordMustChange(path: string | null) {
+  if (!path) {
+    return false;
+  }
+
+  return (
+    path.startsWith("/logout") ||
+    path.startsWith("/admin/profile") ||
+    path.startsWith("/instructor/profile") ||
+    path.startsWith("/student/profile")
+  );
+}
+
 export async function requireAuth() {
   const authContext = await getCurrentAuthContext();
+  const currentPath = await getCurrentRequestPath();
 
   if (!authContext) {
-    redirect(createLoginPathWithNext(await getCurrentRequestPath()));
+    redirect(createLoginPathWithNext(currentPath));
+  }
+
+  if (
+    authContext.user.mustChangePassword &&
+    !canStayOnCurrentPathWhilePasswordMustChange(currentPath)
+  ) {
+    redirect(getPasswordChangePath(authContext.role));
   }
 
   return authContext;

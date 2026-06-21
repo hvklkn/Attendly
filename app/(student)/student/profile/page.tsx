@@ -1,6 +1,7 @@
 import { PageHeader } from "@/components/ui/PageHeader";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { StatusBadge } from "@/components/ui/StatusBadge";
+import { ChangePasswordForm } from "@/components/password/ChangePasswordForm";
 import { requireRole } from "@/lib/auth/guards";
 import {
   formatDateTimeTr,
@@ -72,6 +73,10 @@ export default async function StudentProfilePage() {
       >
         <DetailList items={items} />
       </SectionCard>
+
+      <ChangePasswordForm
+        mustChangePassword={authContext.user.mustChangePassword}
+      />
     </>
   );
 }

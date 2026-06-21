@@ -22,6 +22,32 @@ function getCurrentPosition() {
   });
 }
 
+function getDeviceFingerprintInput() {
+  const userAgentData = (
+    navigator as Navigator & {
+      userAgentData?: {
+        platform?: string;
+      };
+    }
+  ).userAgentData;
+
+  return {
+    userAgent: navigator.userAgent || null,
+    platform: userAgentData?.platform ?? navigator.platform ?? null,
+    timezone: Intl.DateTimeFormat().resolvedOptions().timeZone ?? null,
+    language: navigator.language ?? null,
+    screen:
+      typeof window === "undefined"
+        ? null
+        : {
+            width: window.screen.width,
+            height: window.screen.height,
+            colorDepth: window.screen.colorDepth,
+            pixelRatio: window.devicePixelRatio,
+          },
+  };
+}
+
 export function StudentAttendanceCheckIn({
   token,
 }: StudentAttendanceCheckInProps) {
@@ -54,6 +80,7 @@ export function StudentAttendanceCheckIn({
         accuracyMeters: Number.isFinite(position.coords.accuracy)
           ? position.coords.accuracy
           : null,
+        device: getDeviceFingerprintInput(),
       });
 
       router.push(result.resultUrl);
@@ -81,7 +108,7 @@ export function StudentAttendanceCheckIn({
           void handleCheckIn();
         }}
         disabled={isBusy}
-        className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-md bg-neutral-950 px-4 text-sm font-medium text-white transition hover:bg-neutral-800 disabled:cursor-not-allowed disabled:bg-neutral-300 disabled:text-neutral-500 sm:w-fit"
+        className="inline-flex h-14 w-full items-center justify-center gap-2 rounded-md bg-neutral-950 px-5 text-base font-semibold text-white transition hover:bg-neutral-800 disabled:cursor-not-allowed disabled:bg-neutral-300 disabled:text-neutral-500 sm:w-fit sm:text-sm"
       >
         {isBusy ? (
           <LoaderCircle className="h-4 w-4 animate-spin" aria-hidden="true" />
@@ -111,9 +138,9 @@ export function StudentAttendanceCheckIn({
           <p>{message}</p>
         </div>
       ) : (
-        <p className="text-sm leading-6 text-neutral-600">
-          Konumunuz yalnızca bu yoklama oturumu için sınıf alanı kontrolünde
-          kullanılır.
+        <p className="rounded-md border border-neutral-200 bg-neutral-50 px-3 py-2 text-sm leading-6 text-neutral-700">
+          Butona bastığınızda yalnızca konum izni istenir. Konumunuz bu yoklama
+          oturumunun alan kontrolü için kullanılır.
         </p>
       )}
     </div>

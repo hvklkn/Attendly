@@ -1,7 +1,9 @@
 import { redirect } from "next/navigation";
+import Link from "next/link";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { StatusBadge } from "@/components/ui/StatusBadge";
+import { routes } from "@/constants/routes";
 import { loginAction } from "@/lib/auth/actions";
 import { getCurrentAuthContext } from "@/lib/auth/context";
 import { getSafeInternalPath, isSafeInternalPath } from "@/lib/auth/redirects";
@@ -11,6 +13,7 @@ type LoginPageProps = {
   searchParams?: Promise<{
     error?: string;
     registered?: string;
+    reset?: string;
     next?: string;
   }>;
 };
@@ -30,6 +33,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
 
   const hasError = params?.error === "invalid";
   const hasRegistered = params?.registered === "1";
+  const hasReset = params?.reset === "1";
 
   return (
     <div className="w-full">
@@ -49,6 +53,11 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
         {hasRegistered ? (
           <div className="mt-6 rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
             Kurum kaydınız oluşturuldu. Giriş yaparak devam edebilirsiniz.
+          </div>
+        ) : null}
+        {hasReset ? (
+          <div className="mt-6 rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
+            Şifreniz güncellendi. Yeni şifrenizle giriş yapabilirsiniz.
           </div>
         ) : null}
         <form action={loginAction} className="mt-8 space-y-5">
@@ -71,12 +80,20 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
             />
           </div>
           <div>
-            <label
-              htmlFor="password"
-              className="text-sm font-medium text-neutral-700"
-            >
-              Şifre
-            </label>
+            <div className="flex items-center justify-between gap-3">
+              <label
+                htmlFor="password"
+                className="text-sm font-medium text-neutral-700"
+              >
+                Şifre
+              </label>
+              <Link
+                href={routes.public.forgotPassword}
+                className="text-sm font-medium text-neutral-700 underline-offset-4 transition hover:text-neutral-950 hover:underline"
+              >
+                Şifremi Unuttum?
+              </Link>
+            </div>
             <input
               id="password"
               name="password"

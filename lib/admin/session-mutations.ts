@@ -2,10 +2,10 @@ import "server-only";
 
 import {
   AttendanceSessionStatus,
+  MembershipRole,
   UserStatus,
 } from "@/lib/generated/prisma/enums";
 import { getAdminOrganizationId, type AdminAuthContext } from "@/lib/admin/auth";
-import { isSectionResponsibleRole } from "@/lib/admin/section-responsible";
 import { db } from "@/lib/db";
 import {
   issueAttendanceSessionQrToken,
@@ -56,15 +56,34 @@ export async function createAdminAttendanceSession(
         id: true,
         courseId: true,
         isActive: true,
-        instructorMembershipId: true,
-        instructorMembership: {
+        instructorAssignments: {
+          where: {
+            isActive: true,
+            instructorMembership: {
+              is: {
+                role: MembershipRole.INSTRUCTOR,
+                user: {
+                  is: {
+                    status: UserStatus.ACTIVE,
+                  },
+                },
+              },
+            },
+          },
+          orderBy: {
+            assignedAt: "asc",
+          },
           select: {
-            id: true,
-            role: true,
-            userId: true,
-            user: {
+            instructorMembership: {
               select: {
-                status: true,
+                id: true,
+                role: true,
+                userId: true,
+                user: {
+                  select: {
+                    status: true,
+                  },
+                },
               },
             },
           },
@@ -92,34 +111,35 @@ export async function createAdminAttendanceSession(
       };
     }
 
-    if (
-      !section.instructorMembership ||
-      !isSectionResponsibleRole(section.instructorMembership.role) ||
-      section.instructorMembership.user.status !== UserStatus.ACTIVE
-    ) {
+    if (section.instructorAssignments.length === 0) {
       return {
         ok: false,
         message:
-          "Bu ders grubuna atanmış sorumlu kişi yok. Yoklama oturumu oluşturmak için önce bir öğretmen veya yönetici atayın.",
+          "Bu ders grubuna atanmış öğretmen yok. Yoklama oturumu oluşturmak için önce öğretmen atayın.",
         errors: {
-          sectionId: "Bu ders grubuna atanmış sorumlu kişi yok.",
+          sectionId: "Bu ders grubuna atanmış öğretmen yok.",
         },
       };
     }
 
-    const responsibleMembership = section.instructorMembership;
+    const responsibleMembership =
+      section.instructorAssignments.find(
+        (assignment) =>
+          assignment.instructorMembership.id === input.instructorMembershipId,
+      )?.instructorMembership ??
+      section.instructorAssignments[0]?.instructorMembership;
 
     if (
       input.instructorMembershipId &&
-      input.instructorMembershipId !== section.instructorMembershipId
+      input.instructorMembershipId !== responsibleMembership?.id
     ) {
       return {
         ok: false,
-        message: "Ders grubu ve sorumlu kişi eşleşmiyor.",
+        message: "Ders grubu ve öğretmen ataması eşleşmiyor.",
         errors: {
           instructorMembershipId:
-            "Ders grubuna atanmış sorumlu kişiyi seçin.",
-          sectionId: "Ders grubu ve sorumlu kişi eşleşmiyor.",
+            "Ders grubuna atanmış öğretmenlerden birini seçin.",
+          sectionId: "Ders grubu ve öğretmen ataması eşleşmiyor.",
         },
       };
     }

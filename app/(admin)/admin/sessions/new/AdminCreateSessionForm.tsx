@@ -141,7 +141,11 @@ export function AdminCreateSessionForm({
           !selectedCourseId || section.courseId === selectedCourseId;
         const matchesInstructor =
           !selectedInstructorMembershipId ||
-          section.instructorMembership?.id === selectedInstructorMembershipId;
+          section.instructorAssignments.some(
+            (assignment) =>
+              assignment.instructorMembership.id ===
+              selectedInstructorMembershipId,
+          );
 
         return matchesCourse && matchesInstructor;
       }),
@@ -150,10 +154,12 @@ export function AdminCreateSessionForm({
   const selectedSection =
     options.sections.find((section) => section.id === selectedSectionId) ??
     null;
-  const assignedResponsibleLabel = selectedSection?.instructorMembership
-    ? formatPerson(selectedSection.instructorMembership.user)
+  const assignedResponsibleLabel = selectedSection?.instructorAssignments.length
+    ? selectedSection.instructorAssignments
+        .map((assignment) => formatPerson(assignment.instructorMembership.user))
+        .join(", ")
     : selectedSection
-      ? "Sorumlu kişi henüz atanmadı"
+      ? "Öğretmen henüz atanmadı"
       : "Ders grubu seçildiğinde görünür";
 
   function captureDeviceLocation() {
@@ -283,7 +289,7 @@ export function AdminCreateSessionForm({
 
           <SectionCard
             title="Ders İlişkisi"
-            description="Oturumun bağlı olduğu sorumlu kişi, ders ve ders grubunu seçin."
+            description="Oturumun bağlı olduğu öğretmen, ders ve ders grubunu seçin."
             actions={
               <div className="flex h-9 w-9 items-center justify-center rounded-md bg-neutral-100 text-neutral-600">
                 <BookOpen className="h-4 w-4" aria-hidden="true" />
@@ -293,8 +299,8 @@ export function AdminCreateSessionForm({
             <div className="grid gap-5 md:grid-cols-2">
               <Field
                 id="instructor-membership-id"
-                label="Sorumlu Kişi"
-                description="Seçilen sorumlu kişinin ders grupları listelenir."
+                label="Öğretmen"
+                description="Seçilen öğretmene atanmış ders grupları listelenir."
                 error={getFieldError(errors, "instructorMembershipId")}
               >
                 <select
@@ -318,8 +324,8 @@ export function AdminCreateSessionForm({
                 >
                   <option value="">
                     {hasResponsibleCandidates
-                      ? "Tüm sorumlu kişiler"
-                      : "Sorumlu kişi yok"}
+                      ? "Tüm öğretmenler"
+                      : "Öğretmen yok"}
                   </option>
                   {options.responsibleCandidates.map((membership) => (
                     <option key={membership.id} value={membership.id}>
@@ -368,7 +374,7 @@ export function AdminCreateSessionForm({
               <Field
                 id="section-id"
                 label="Ders Grubu"
-                description="Seçilen ders grubu atanmış sorumlu kişi üzerinden doğrulanır."
+                description="Seçilen ders grubu aktif öğretmen ataması üzerinden doğrulanır."
                 error={getFieldError(errors, "sectionId")}
               >
                 <select
@@ -394,9 +400,15 @@ export function AdminCreateSessionForm({
                   {filteredSections.map((section) => (
                     <option key={section.id} value={section.id}>
                       {section.course.code} · {section.name} ·{" "}
-                      {section.instructorMembership
-                        ? formatPerson(section.instructorMembership.user)
-                        : "Sorumlu kişi henüz atanmadı"}{" "}
+                      {section.instructorAssignments.length
+                        ? section.instructorAssignments
+                            .map((assignment) =>
+                              formatPerson(
+                                assignment.instructorMembership.user,
+                              ),
+                            )
+                            .join(", ")
+                        : "Öğretmen henüz atanmadı"}{" "}
                       · {section._count.enrollments} kayıtlı
                     </option>
                   ))}
@@ -405,18 +417,18 @@ export function AdminCreateSessionForm({
 
               <div className="rounded-md border border-neutral-200 bg-neutral-50 p-4">
                 <p className="text-sm font-medium text-neutral-700">
-                  Atanmış Sorumlu
+                  Atanmış Öğretmenler
                 </p>
                 <p className="mt-2 text-sm font-semibold text-neutral-950">
                   {assignedResponsibleLabel}
                 </p>
                 <p className="mt-2 text-xs leading-5 text-neutral-500">
-                  Öğretmen sorumluluğundaki oturumlar öğretmen panelinde,
-                  yönetici sorumluluğundaki oturumlar admin panelinde görünür.
+                  Öğretmenler yalnızca kendilerine atanmış şubelerdeki
+                  oturumları yönetebilir.
                 </p>
                 {filteredSections.length === 0 ? (
                   <p className="mt-3 text-xs leading-5 text-amber-700">
-                    Bu sorumlu kişiye ait ders grubu bulunamadı.
+                    Bu öğretmene atanmış ders grubu bulunamadı.
                   </p>
                 ) : null}
               </div>
@@ -747,7 +759,7 @@ export function AdminCreateSessionForm({
               </div>
               <div className="flex items-center justify-between gap-3">
                 <span className="text-sm font-medium text-neutral-700">
-                  Sorumlu Kişiler
+                  Öğretmenler
                 </span>
                 <StatusBadge
                   label={String(options.responsibleCandidates.length)}

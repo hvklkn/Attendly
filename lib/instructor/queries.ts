@@ -10,6 +10,10 @@ import {
   getInstructorOrganizationId,
   type InstructorAuthContext,
 } from "@/lib/instructor/auth";
+import {
+  getInstructorAssignedSectionWhere,
+  getInstructorAssignedSessionWhere,
+} from "@/lib/instructor/assignment-scope";
 import { db } from "@/lib/db";
 import type { InstructorSessionCreateOptionsData } from "@/lib/instructor/session-create";
 
@@ -19,21 +23,6 @@ const INSTRUCTOR_ACTIVE_SESSION_STATUSES = [
   AttendanceSessionStatus.ACTIVE,
 ];
 
-function getInstructorSessionWhere(
-  authContext: InstructorAuthContext,
-  sessionId?: string,
-) {
-  return {
-    ...(sessionId ? { id: sessionId } : {}),
-    organizationId: getInstructorOrganizationId(authContext),
-    section: {
-      is: {
-        instructorMembershipId: authContext.membership.id,
-      },
-    },
-  };
-}
-
 export async function getInstructorDashboardData(
   authContext: InstructorAuthContext,
 ) {
@@ -42,7 +31,7 @@ export async function getInstructorDashboardData(
   todayStart.setHours(0, 0, 0, 0);
   const tomorrowStart = new Date(todayStart);
   tomorrowStart.setDate(tomorrowStart.getDate() + 1);
-  const where = getInstructorSessionWhere(authContext);
+  const where = getInstructorAssignedSessionWhere(authContext);
   const organizationId = getInstructorOrganizationId(authContext);
 
   const [
@@ -86,19 +75,16 @@ export async function getInstructorDashboardData(
       },
     }),
     db.section.count({
-      where: {
-        organizationId,
-        instructorMembershipId: authContext.membership.id,
-      },
+      where: getInstructorAssignedSectionWhere(authContext, {
+        activeSectionOnly: true,
+      }),
     }),
     db.enrollment.findMany({
       where: {
         organizationId,
         status: EnrollmentStatus.ACTIVE,
         section: {
-          is: {
-            instructorMembershipId: authContext.membership.id,
-          },
+          is: getInstructorAssignedSectionWhere(authContext),
         },
       },
       distinct: ["studentMembershipId"],
@@ -107,11 +93,10 @@ export async function getInstructorDashboardData(
       },
     }),
     db.section.findMany({
-      where: {
-        organizationId,
-        instructorMembershipId: authContext.membership.id,
-        isActive: true,
-      },
+      where: getInstructorAssignedSectionWhere(authContext, {
+        activeSectionOnly: true,
+        activeCourseOnly: true,
+      }),
       orderBy: [
         {
           courseId: "asc",
@@ -161,7 +146,13 @@ export async function getInstructorDashboardData(
         organizationId,
         attendanceSession: {
           section: {
-            instructorMembershipId: authContext.membership.id,
+            instructorAssignments: {
+              some: {
+                organizationId,
+                instructorMembershipId: authContext.membership.id,
+                isActive: true,
+              },
+            },
           },
         },
       },
@@ -224,7 +215,7 @@ export async function getInstructorSessionsData(
 
   return db.attendanceSession.findMany({
     where: {
-      ...getInstructorSessionWhere(authContext),
+      ...getInstructorAssignedSessionWhere(authContext),
       ...(query
         ? {
             OR: [
@@ -262,11 +253,10 @@ export async function getInstructorSessionCreateOptionsData(
 
   const [sections, rooms] = await Promise.all([
     db.section.findMany({
-      where: {
-        organizationId,
-        instructorMembershipId: authContext.membership.id,
-        isActive: true,
-      },
+      where: getInstructorAssignedSectionWhere(authContext, {
+        activeSectionOnly: true,
+        activeCourseOnly: true,
+      }),
       orderBy: [
         {
           courseId: "asc",
@@ -339,7 +329,7 @@ export async function getInstructorSessionDetailData(
 
   const [session, attendanceStatusCounts] = await Promise.all([
     db.attendanceSession.findFirst({
-      where: getInstructorSessionWhere(authContext, sessionId),
+      where: getInstructorAssignedSessionWhere(authContext, sessionId),
       select: {
         id: true,
         title: true,
@@ -533,7 +523,13 @@ export async function getInstructorSessionDetailData(
         organizationId,
         attendanceSession: {
           section: {
-            instructorMembershipId: authContext.membership.id,
+            instructorAssignments: {
+              some: {
+                organizationId,
+                instructorMembershipId: authContext.membership.id,
+                isActive: true,
+              },
+            },
           },
         },
       },
@@ -565,16 +561,38 @@ export async function getInstructorStudentsData(
   authContext: InstructorAuthContext,
   input?: {
     query?: string;
+    sectionId?: string;
+    enrollmentStatus?: EnrollmentStatus;
   },
 ) {
   const organizationId = getInstructorOrganizationId(authContext);
   const query = input?.query?.trim();
+  const sectionId = input?.sectionId?.trim();
+  const enrollmentStatus = input?.enrollmentStatus;
+  const assignedSectionWhere = getInstructorAssignedSectionWhere(authContext);
+  const activeAssignedSectionWhere = getInstructorAssignedSectionWhere(
+    authContext,
+    {
+      activeSectionOnly: true,
+      activeCourseOnly: true,
+    },
+  );
 
   const [students, sections] = await Promise.all([
     db.membership.findMany({
       where: {
         organizationId,
         role: MembershipRole.STUDENT,
+        enrollments: {
+          some: {
+            organizationId,
+            ...(sectionId ? { sectionId } : {}),
+            ...(enrollmentStatus ? { status: enrollmentStatus } : {}),
+            section: {
+              is: assignedSectionWhere,
+            },
+          },
+        },
         ...(query
           ? {
               OR: [
@@ -601,6 +619,7 @@ export async function getInstructorStudentsData(
                     some: {
                       section: {
                         is: {
+                          ...assignedSectionWhere,
                           name: {
                             contains: query,
                           },
@@ -614,6 +633,7 @@ export async function getInstructorStudentsData(
                     some: {
                       section: {
                         is: {
+                          ...assignedSectionWhere,
                           code: {
                             contains: query,
                           },
@@ -627,6 +647,7 @@ export async function getInstructorStudentsData(
                     some: {
                       section: {
                         is: {
+                          ...assignedSectionWhere,
                           course: {
                             is: {
                               code: {
@@ -651,6 +672,7 @@ export async function getInstructorStudentsData(
       take: 100,
       select: {
         id: true,
+        studentNo: true,
         user: {
           select: {
             id: true,
@@ -662,6 +684,9 @@ export async function getInstructorStudentsData(
         enrollments: {
           where: {
             organizationId,
+            section: {
+              is: assignedSectionWhere,
+            },
           },
           orderBy: [
             {
@@ -694,10 +719,7 @@ export async function getInstructorStudentsData(
       },
     }),
     db.section.findMany({
-      where: {
-        organizationId,
-        isActive: true,
-      },
+      where: activeAssignedSectionWhere,
       orderBy: [
         {
           courseId: "asc",
@@ -741,11 +763,10 @@ export async function getInstructorStudentCreateOptionsData(
   const organizationId = getInstructorOrganizationId(authContext);
 
   const sections = await db.section.findMany({
-    where: {
-      organizationId,
-      instructorMembershipId: authContext.membership.id,
-      isActive: true,
-    },
+    where: getInstructorAssignedSectionWhere(authContext, {
+      activeSectionOnly: true,
+      activeCourseOnly: true,
+    }),
     orderBy: [
       {
         courseId: "asc",

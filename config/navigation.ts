@@ -69,6 +69,12 @@ export const adminNavigation: RoleNavigation = {
       description: "Çalışma alanı ayarları",
       icon: "settings",
     },
+    {
+      title: "Profil",
+      href: routes.admin.profile,
+      description: "Hesap ve şifre",
+      icon: "profile",
+    },
   ],
 };
 
@@ -100,6 +106,12 @@ export const instructorNavigation: RoleNavigation = {
       href: routes.instructor.reports,
       description: "Ders ve şube devam raporları",
       icon: "reports",
+    },
+    {
+      title: "Profil",
+      href: routes.instructor.profile,
+      description: "Hesap ve şifre",
+      icon: "profile",
     },
   ],
 };

@@ -11,6 +11,7 @@ import {
   getInstructorOrganizationId,
   type InstructorAuthContext,
 } from "@/lib/instructor/auth";
+import { getInstructorAssignedSectionWhere } from "@/lib/instructor/assignment-scope";
 import {
   formatDateTimeTr,
   getAttendanceSessionStatusLabel,
@@ -157,11 +158,10 @@ export async function getInstructorReportsOptions(
 ): Promise<InstructorReportsOptions> {
   const organizationId = getInstructorOrganizationId(authContext);
   const sections = await db.section.findMany({
-    where: {
-      organizationId,
-      instructorMembershipId: authContext.membership.id,
-      isActive: true,
-    },
+    where: getInstructorAssignedSectionWhere(authContext, {
+      activeSectionOnly: true,
+      activeCourseOnly: true,
+    }),
     orderBy: [
       {
         courseId: "asc",
@@ -240,8 +240,7 @@ export async function getInstructorSectionReportData(
   const section = await db.section.findFirst({
     where: {
       id: sectionId,
-      organizationId,
-      instructorMembershipId: authContext.membership.id,
+      ...getInstructorAssignedSectionWhere(authContext),
       ...(courseId ? { courseId } : {}),
     },
     select: {

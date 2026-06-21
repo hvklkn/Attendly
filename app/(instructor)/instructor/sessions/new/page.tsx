@@ -26,7 +26,7 @@ export default async function InstructorCreateSessionPage() {
         >
           Geri
         </ButtonLink>
-        <StatusBadge label="ACTIVE" tone="success" />
+        <StatusBadge label="Aktif" tone="success" />
       </PageHeader>
 
       <InstructorCreateSessionForm

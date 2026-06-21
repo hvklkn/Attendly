@@ -16,7 +16,7 @@ export default async function AdminCreateSectionPage() {
       <PageHeader
         eyebrow={authContext.activeOrganization.name}
         title="Ders Grubu Oluştur"
-        description="Ders / kurs, ders grubu ve sorumlu kişi ilişkisini tanımlayın."
+        description="Ders / kurs, ders grubu ve öğretmen atamasını tanımlayın."
       >
         <ButtonLink
           href={routes.admin.sections}

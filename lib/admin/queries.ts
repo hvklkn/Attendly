@@ -8,7 +8,6 @@ import {
   UserStatus,
 } from "@/lib/generated/prisma/enums";
 import { getAdminOrganizationId, type AdminAuthContext } from "@/lib/admin/auth";
-import { SECTION_RESPONSIBLE_ROLES } from "@/lib/admin/section-responsible";
 import { db } from "@/lib/db";
 
 const ACTIVE_SESSION_STATUSES = [
@@ -497,6 +496,11 @@ export async function getAdminSessionCreateOptionsData(
       where: {
         organizationId,
         isActive: true,
+        course: {
+          is: {
+            isActive: true,
+          },
+        },
       },
       orderBy: [
         {
@@ -529,6 +533,38 @@ export async function getAdminSessionCreateOptionsData(
             },
           },
         },
+        instructorAssignments: {
+          where: {
+            isActive: true,
+            instructorMembership: {
+              is: {
+                role: MembershipRole.INSTRUCTOR,
+                user: {
+                  is: {
+                    status: UserStatus.ACTIVE,
+                  },
+                },
+              },
+            },
+          },
+          orderBy: {
+            assignedAt: "asc",
+          },
+          select: {
+            instructorMembership: {
+              select: {
+                id: true,
+                role: true,
+                user: {
+                  select: {
+                    name: true,
+                    email: true,
+                  },
+                },
+              },
+            },
+          },
+        },
         _count: {
           select: {
             enrollments: true,
@@ -555,9 +591,7 @@ export async function getAdminSessionCreateOptionsData(
     db.membership.findMany({
       where: {
         organizationId,
-        role: {
-          in: [...SECTION_RESPONSIBLE_ROLES],
-        },
+        role: MembershipRole.INSTRUCTOR,
         user: {
           is: {
             status: UserStatus.ACTIVE,
@@ -694,22 +728,27 @@ export async function getAdminSectionsData(
                 },
               },
               {
-                instructorMembership: {
-                  is: {
-                    user: {
+                instructorAssignments: {
+                  some: {
+                    isActive: true,
+                    instructorMembership: {
                       is: {
-                        OR: [
-                          {
-                            name: {
-                              contains: query,
-                            },
+                        user: {
+                          is: {
+                            OR: [
+                              {
+                                name: {
+                                  contains: query,
+                                },
+                              },
+                              {
+                                email: {
+                                  contains: query,
+                                },
+                              },
+                            ],
                           },
-                          {
-                            email: {
-                              contains: query,
-                            },
-                          },
-                        ],
+                        },
                       },
                     },
                   },
@@ -753,6 +792,31 @@ export async function getAdminSectionsData(
           },
         },
       },
+      instructorAssignments: {
+        where: {
+          isActive: true,
+        },
+        orderBy: {
+          assignedAt: "asc",
+        },
+        select: {
+          id: true,
+          instructorMembershipId: true,
+          assignedAt: true,
+          instructorMembership: {
+            select: {
+              id: true,
+              role: true,
+              user: {
+                select: {
+                  name: true,
+                  email: true,
+                },
+              },
+            },
+          },
+        },
+      },
       _count: {
         select: {
           enrollments: true,
@@ -791,9 +855,7 @@ export async function getAdminSectionCreateOptionsData(
     db.membership.findMany({
       where: {
         organizationId,
-        role: {
-          in: [...SECTION_RESPONSIBLE_ROLES],
-        },
+        role: MembershipRole.INSTRUCTOR,
         user: {
           is: {
             status: UserStatus.ACTIVE,
@@ -865,15 +927,35 @@ export async function getAdminUsersData(
   input?: {
     query?: string;
     role?: MembershipRole;
+    sectionId?: string;
+    enrollmentStatus?: EnrollmentStatus;
   },
 ) {
   const organizationId = getAdminOrganizationId(authContext);
   const query = input?.query?.trim();
+  const sectionId = input?.sectionId?.trim();
+  const enrollmentStatus = input?.enrollmentStatus;
+  const hasEnrollmentFilter = Boolean(sectionId || enrollmentStatus);
 
   return db.membership.findMany({
     where: {
       organizationId,
-      ...(input?.role ? { role: input.role } : {}),
+      ...(input?.role
+        ? { role: input.role }
+        : hasEnrollmentFilter
+          ? { role: MembershipRole.STUDENT }
+          : {}),
+      ...(hasEnrollmentFilter
+        ? {
+            enrollments: {
+              some: {
+                organizationId,
+                ...(sectionId ? { sectionId } : {}),
+                ...(enrollmentStatus ? { status: enrollmentStatus } : {}),
+              },
+            },
+          }
+        : {}),
       ...(query
         ? {
             user: {
@@ -906,6 +988,7 @@ export async function getAdminUsersData(
     select: {
       id: true,
       role: true,
+      studentNo: true,
       createdAt: true,
       updatedAt: true,
       user: {
@@ -926,26 +1009,36 @@ export async function getAdminUsersData(
       },
       enrollments: {
         where: {
-          status: EnrollmentStatus.ACTIVE,
+          organizationId,
         },
         select: {
           id: true,
+          status: true,
+          enrolledAt: true,
+          endedAt: true,
           section: {
             select: {
+              id: true,
               name: true,
               code: true,
               course: {
                 select: {
                   code: true,
+                  title: true,
                 },
               },
             },
           },
         },
-        orderBy: {
-          enrolledAt: "desc",
-        },
-        take: 3,
+        orderBy: [
+          {
+            status: "asc",
+          },
+          {
+            enrolledAt: "desc",
+          },
+        ],
+        take: 5,
       },
       _count: {
         select: {

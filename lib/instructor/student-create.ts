@@ -38,6 +38,30 @@ export type InstructorStudentCreateActionState = {
   errors: InstructorStudentCreateFormErrors;
 };
 
+export type InstructorStudentEditFormValues = {
+  name: string;
+  studentNo: string;
+};
+
+export type InstructorStudentEditFormField =
+  keyof InstructorStudentEditFormValues;
+
+export type InstructorStudentEditFormErrors = Partial<
+  Record<InstructorStudentEditFormField, string>
+>;
+
+export type InstructorStudentEditActionState = {
+  status: "idle" | "error";
+  message: string | null;
+  values: InstructorStudentEditFormValues;
+  errors: InstructorStudentEditFormErrors;
+};
+
+export type ValidInstructorStudentEditInput = {
+  name: string;
+  studentNo: string | null;
+};
+
 export type ValidInstructorStudentCreateInput = {
   name: string;
   email: string;
@@ -59,6 +83,17 @@ export const initialInstructorStudentCreateActionState: InstructorStudentCreateA
     status: "idle",
     message: null,
     values: initialInstructorStudentCreateFormValues,
+    errors: {},
+  };
+
+export const initialInstructorStudentEditActionState: InstructorStudentEditActionState =
+  {
+    status: "idle",
+    message: null,
+    values: {
+      name: "",
+      studentNo: "",
+    },
     errors: {},
   };
 
@@ -151,6 +186,58 @@ export function validateInstructorStudentCreateFormValues(
       password,
       sectionId,
       enrollmentStatus: "ACTIVE",
+    },
+  };
+}
+
+export function getInstructorStudentEditFormValues(
+  formData: FormData,
+): InstructorStudentEditFormValues {
+  return {
+    name: String(formData.get("name") ?? ""),
+    studentNo: String(formData.get("studentNo") ?? ""),
+  };
+}
+
+export function validateInstructorStudentEditFormValues(
+  values: InstructorStudentEditFormValues,
+):
+  | {
+      ok: true;
+      values: InstructorStudentEditFormValues;
+      data: ValidInstructorStudentEditInput;
+    }
+  | {
+      ok: false;
+      values: InstructorStudentEditFormValues;
+      errors: InstructorStudentEditFormErrors;
+    } {
+  const name = normalizeText(values.name);
+  const studentNo = normalizeText(values.studentNo);
+  const normalizedValues: InstructorStudentEditFormValues = {
+    name,
+    studentNo,
+  };
+  const errors: InstructorStudentEditFormErrors = {};
+
+  if (!name) {
+    errors.name = "Ad soyad zorunludur.";
+  }
+
+  if (Object.keys(errors).length > 0) {
+    return {
+      ok: false,
+      values: normalizedValues,
+      errors,
+    };
+  }
+
+  return {
+    ok: true,
+    values: normalizedValues,
+    data: {
+      name,
+      studentNo: studentNo || null,
     },
   };
 }

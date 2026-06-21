@@ -58,6 +58,49 @@ function createReportFileName(sectionLabel: string) {
   return `${normalizedLabel || "sube"}-devam-raporu.csv`;
 }
 
+function getRateValue(rate: string) {
+  const numericValue = Number(rate.replace("%", ""));
+
+  return Number.isFinite(numericValue) ? numericValue : 0;
+}
+
+function AttendanceRate({
+  rate,
+  compact = false,
+}: {
+  rate: string;
+  compact?: boolean;
+}) {
+  const value = getRateValue(rate);
+  const tone = value >= 70 ? "success" : value >= 40 ? "warning" : "danger";
+
+  return (
+    <div className={compact ? "grid min-w-36 gap-2" : "grid min-w-44 gap-2"}>
+      <div className="flex items-center justify-between gap-3">
+        <StatusBadge label={rate} tone={tone} />
+        <span className="text-xs font-medium text-neutral-500">
+          Devam oranı
+        </span>
+      </div>
+      <div
+        className="h-2 overflow-hidden rounded-full bg-neutral-100"
+        aria-hidden="true"
+      >
+        <div
+          className={
+            tone === "success"
+              ? "h-full rounded-full bg-emerald-500"
+              : tone === "warning"
+                ? "h-full rounded-full bg-amber-500"
+                : "h-full rounded-full bg-rose-500"
+          }
+          style={{ width: `${Math.min(Math.max(value, 0), 100)}%` }}
+        />
+      </div>
+    </div>
+  );
+}
+
 export default async function InstructorReportsPage({
   searchParams,
 }: InstructorReportsPageProps) {
@@ -196,7 +239,7 @@ export default async function InstructorReportsPage({
               id="student"
               name="student"
               defaultValue={filters.student}
-              placeholder="Ad veya email ara"
+              placeholder="Ad veya e-posta ara"
               className={inputClassName}
             />
           </div>
@@ -216,7 +259,7 @@ export default async function InstructorReportsPage({
       {!hasSections ? (
         <EmptyState
           title="Raporlanacak şube yok"
-          description="Size atanmış aktif ders/şube olduğunda genel devam raporları burada kullanılabilir."
+          description="Size atanmış aktif bir şube bulunmuyor. Lütfen yöneticinizden şube ataması yapmasını isteyin."
           icon={<FileSpreadsheet className="h-5 w-5" aria-hidden="true" />}
         />
       ) : !filters.sectionId ? (
@@ -258,7 +301,7 @@ export default async function InstructorReportsPage({
             <StatCard
               label="Toplam Katılım"
               value={String(report.summary.totalAttendance)}
-              description="PRESENT + LATE kayıt toplamı."
+              description="Katıldı ve geç katıldı kayıt toplamı."
               icon={<CheckCircle2 className="h-4 w-4" aria-hidden="true" />}
               tone="success"
             />
@@ -311,7 +354,7 @@ export default async function InstructorReportsPage({
                     <thead className="bg-neutral-50 text-xs font-medium uppercase tracking-normal text-neutral-500">
                       <tr>
                         <th className="px-4 py-3">Öğrenci adı</th>
-                        <th className="px-4 py-3">Email</th>
+                        <th className="px-4 py-3">E-posta</th>
                         <th className="px-4 py-3">Kayıtlı olduğu şube</th>
                         <th className="px-4 py-3">Toplam oturum</th>
                         <th className="px-4 py-3">Katıldı</th>
@@ -350,15 +393,7 @@ export default async function InstructorReportsPage({
                             {row.rejectedCount}
                           </td>
                           <td className="px-4 py-4">
-                            <StatusBadge
-                              label={row.attendanceRate}
-                              tone={
-                                Number(row.attendanceRate.replace("%", "")) >=
-                                70
-                                  ? "success"
-                                  : "warning"
-                              }
-                            />
+                            <AttendanceRate rate={row.attendanceRate} compact />
                           </td>
                           <td className="px-4 py-4 text-neutral-600">
                             {row.lastAttendanceAt}
@@ -384,14 +419,7 @@ export default async function InstructorReportsPage({
                             {row.email}
                           </p>
                         </div>
-                        <StatusBadge
-                          label={row.attendanceRate}
-                          tone={
-                            Number(row.attendanceRate.replace("%", "")) >= 70
-                              ? "success"
-                              : "warning"
-                          }
-                        />
+                        <AttendanceRate rate={row.attendanceRate} compact />
                       </div>
                       <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-2">
                         <div>

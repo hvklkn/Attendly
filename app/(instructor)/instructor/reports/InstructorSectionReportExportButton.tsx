@@ -10,7 +10,7 @@ type InstructorSectionReportExportButtonProps = {
 
 const CSV_HEADERS: Array<[keyof InstructorSectionReportStudentRow, string]> = [
   ["studentName", "Öğrenci adı"],
-  ["email", "Email"],
+  ["email", "E-posta"],
   ["sectionLabel", "Kayıtlı olduğu şube"],
   ["totalSessions", "Toplam oturum"],
   ["presentCount", "Katıldı"],

@@ -361,6 +361,37 @@ async function main() {
     },
   });
 
+  async function upsertInstructorAssignment(
+    sectionId: string,
+    instructor: { membershipId: string },
+  ) {
+    await db.instructorSectionAssignment.upsert({
+      where: {
+        organizationId_instructorMembershipId_sectionId: {
+          organizationId: demoOrganization.id,
+          instructorMembershipId: instructor.membershipId,
+          sectionId,
+        },
+      },
+      update: {
+        isActive: true,
+        assignedAt: new Date(),
+      },
+      create: {
+        organizationId: demoOrganization.id,
+        instructorMembershipId: instructor.membershipId,
+        sectionId,
+        isActive: true,
+      },
+    });
+  }
+
+  await Promise.all([
+    upsertInstructorAssignment(sectionOne.id, instructorUser),
+    upsertInstructorAssignment(sectionTwo.id, instructorUser),
+    upsertInstructorAssignment(sectionThree.id, secondInstructorUser),
+  ]);
+
   const enrollments = new Map<string, { id: string }>();
 
   async function upsertEnrollment(

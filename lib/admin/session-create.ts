@@ -41,6 +41,16 @@ export type AdminSessionCreateOptionsData = {
         email: string;
       };
     } | null;
+    instructorAssignments: Array<{
+      instructorMembership: {
+        id: string;
+        role: string;
+        user: {
+          name: string | null;
+          email: string;
+        };
+      };
+    }>;
     _count: {
       enrollments: number;
     };

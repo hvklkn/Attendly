@@ -311,7 +311,8 @@ export function InstructorCreateStudentForm({
             <div className="flex gap-3">
               <Info className="mt-1 h-4 w-4 shrink-0 text-neutral-500" />
               <p>
-                CSV aktarımı sonraki adımda aynı kapsam kurallarıyla eklenecek.
+                Çoklu öğrenci eklemek için öğrenciler sayfasındaki CSV aktarımını
+                kullanabilirsiniz.
               </p>
             </div>
           </div>

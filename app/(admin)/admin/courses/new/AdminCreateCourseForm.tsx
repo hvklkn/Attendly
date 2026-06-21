@@ -10,8 +10,10 @@ import { routes } from "@/constants/routes";
 import { createAdminCourseAction } from "@/lib/admin/course-actions";
 import {
   initialAdminCourseCreateActionState,
+  type AdminCourseCreateActionState,
   type AdminCourseCreateFormErrors,
   type AdminCourseCreateFormField,
+  type AdminCourseCreateFormValues,
 } from "@/lib/admin/course-create";
 
 const inputClassName =
@@ -54,7 +56,12 @@ function Field({
   );
 }
 
-function SubmitButton() {
+type CourseFormAction = (
+  previousState: AdminCourseCreateActionState,
+  formData: FormData,
+) => Promise<AdminCourseCreateActionState>;
+
+function SubmitButton({ label }: { label: string }) {
   const { pending } = useFormStatus();
 
   return (
@@ -63,21 +70,37 @@ function SubmitButton() {
       disabled={pending}
       className="inline-flex h-9 items-center justify-center rounded-md bg-neutral-950 px-4 text-sm font-medium text-white transition hover:bg-neutral-800 disabled:cursor-not-allowed disabled:bg-neutral-200 disabled:text-neutral-500"
     >
-      {pending ? "Oluşturuluyor..." : "Ders / Kurs Oluştur"}
+      {pending ? "Kaydediliyor..." : label}
     </button>
   );
 }
 
-export function AdminCreateCourseForm() {
+export function AdminCreateCourseForm({
+  action,
+  initialValues,
+  courseId,
+  submitLabel = "Ders / Kurs Oluştur",
+}: {
+  action?: CourseFormAction;
+  initialValues?: AdminCourseCreateFormValues;
+  courseId?: string;
+  submitLabel?: string;
+}) {
   const [state, formAction] = useActionState(
-    createAdminCourseAction,
-    initialAdminCourseCreateActionState,
+    action ?? createAdminCourseAction,
+    initialValues
+      ? {
+          ...initialAdminCourseCreateActionState,
+          values: initialValues,
+        }
+      : initialAdminCourseCreateActionState,
   );
   const { values, errors } = state;
 
   return (
     <section className="grid gap-6 xl:grid-cols-[1fr_360px]">
       <form action={formAction} className="grid gap-6">
+        {courseId ? <input type="hidden" name="courseId" value={courseId} /> : null}
         {state.status === "error" && state.message ? (
           <div
             role="alert"
@@ -201,7 +224,7 @@ export function AdminCreateCourseForm() {
           </div>
           <div className="flex flex-wrap gap-3">
             <ButtonLink href={routes.admin.courses}>İptal</ButtonLink>
-            <SubmitButton />
+            <SubmitButton label={submitLabel} />
           </div>
         </div>
       </form>

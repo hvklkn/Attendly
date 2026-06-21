@@ -1,5 +1,6 @@
 "use server";
 
+import { createHash } from "node:crypto";
 import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { routes } from "@/constants/routes";
@@ -31,12 +32,26 @@ import {
 } from "@/lib/student/attendance-result";
 
 const MAX_ACCEPTABLE_LOCATION_ACCURACY_METERS = 100;
+const TOKEN_REUSE_WINDOW_MS = 60_000;
+const TOKEN_REUSE_DISTINCT_LIMIT = 5;
 
 export type SubmitStudentAttendanceActionInput = {
   token: string;
   latitude: number;
   longitude: number;
   accuracyMeters?: number | null;
+  device?: {
+    userAgent?: string | null;
+    platform?: string | null;
+    timezone?: string | null;
+    language?: string | null;
+    screen?: {
+      width?: number | null;
+      height?: number | null;
+      colorDepth?: number | null;
+      pixelRatio?: number | null;
+    } | null;
+  } | null;
 };
 
 export type SubmitStudentAttendanceActionResult = {
@@ -91,6 +106,68 @@ function getAcceptedAttendanceStatus(
     : AttendanceRecordStatus.PRESENT;
 }
 
+function normalizeFingerprintText(value: string | null | undefined) {
+  return value?.trim().slice(0, 160) || null;
+}
+
+function normalizeFingerprintNumber(value: number | null | undefined) {
+  if (typeof value !== "number" || !Number.isFinite(value) || value <= 0) {
+    return null;
+  }
+
+  return Math.round(value * 100) / 100;
+}
+
+function createDeviceFingerprintHash(input: {
+  organizationId: string;
+  requestUserAgent: string | null;
+  device: SubmitStudentAttendanceActionInput["device"];
+}) {
+  const device = input.device;
+  const fingerprintPayload = {
+    organizationId: input.organizationId,
+    userAgent:
+      normalizeFingerprintText(device?.userAgent) ??
+      normalizeFingerprintText(input.requestUserAgent),
+    platform: normalizeFingerprintText(device?.platform),
+    timezone: normalizeFingerprintText(device?.timezone),
+    language: normalizeFingerprintText(device?.language),
+    screen: {
+      width: normalizeFingerprintNumber(device?.screen?.width),
+      height: normalizeFingerprintNumber(device?.screen?.height),
+      colorDepth: normalizeFingerprintNumber(device?.screen?.colorDepth),
+      pixelRatio: normalizeFingerprintNumber(device?.screen?.pixelRatio),
+    },
+  };
+
+  if (
+    !fingerprintPayload.userAgent &&
+    !fingerprintPayload.platform &&
+    !fingerprintPayload.timezone &&
+    !fingerprintPayload.language &&
+    !fingerprintPayload.screen.width &&
+    !fingerprintPayload.screen.height
+  ) {
+    return null;
+  }
+
+  return createHash("sha256")
+    .update(JSON.stringify(fingerprintPayload))
+    .digest("hex");
+}
+
+function summarizeUserAgent(userAgent: string | null | undefined) {
+  const normalizedUserAgent = userAgent?.replace(/\s+/g, " ").trim();
+
+  if (!normalizedUserAgent) {
+    return null;
+  }
+
+  return normalizedUserAgent.length > 160
+    ? `${normalizedUserAgent.slice(0, 157)}...`
+    : normalizedUserAgent;
+}
+
 async function getRequestMetadata() {
   try {
     const requestHeaders = await headers();
@@ -141,13 +218,30 @@ function getSecurityAlertMessage(alertType: AttendanceAlertType) {
     return "Öğrenci geçersiz QR kod ile yoklamaya katılmayı denedi.";
   }
 
+  if (alertType === AttendanceAlertType.MULTI_DEVICE_ATTEMPT) {
+    return "Öğrenci aynı oturuma farklı bir cihazdan tekrar giriş denedi.";
+  }
+
+  if (alertType === AttendanceAlertType.SUSPICIOUS_TOKEN_REUSE) {
+    return "Aynı QR token kısa süre içinde çok fazla farklı kullanıcı veya cihaz tarafından denendi.";
+  }
+
+  if (alertType === AttendanceAlertType.TOKEN_REPLACED_BY_NEW_QR) {
+    return "Yeni QR üretildiği için eski aktif QR token iptal edildi.";
+  }
+
+  if (alertType === AttendanceAlertType.DEVICE_REGISTERED) {
+    return "Öğrenci yoklama için yeni bir cihazla giriş yaptı.";
+  }
+
   return "Şüpheli yoklama denemesi kaydedildi.";
 }
 
 function getSecurityAlertSeverity(alertType: AttendanceAlertType) {
   if (
     alertType === AttendanceAlertType.INVALID_TOKEN_ATTEMPT ||
-    alertType === AttendanceAlertType.STUDENT_NOT_ENROLLED
+    alertType === AttendanceAlertType.STUDENT_NOT_ENROLLED ||
+    alertType === AttendanceAlertType.SUSPICIOUS_TOKEN_REUSE
   ) {
     return AttendanceAlertSeverity.HIGH;
   }
@@ -155,7 +249,8 @@ function getSecurityAlertSeverity(alertType: AttendanceAlertType) {
   if (
     alertType === AttendanceAlertType.OUTSIDE_GEOFENCE ||
     alertType === AttendanceAlertType.LOW_ACCURACY_LOCATION ||
-    alertType === AttendanceAlertType.SESSION_CLOSED_ATTEMPT
+    alertType === AttendanceAlertType.SESSION_CLOSED_ATTEMPT ||
+    alertType === AttendanceAlertType.MULTI_DEVICE_ATTEMPT
   ) {
     return AttendanceAlertSeverity.MEDIUM;
   }
@@ -224,6 +319,183 @@ async function createInvalidTokenAuditLog(input: {
     });
   } catch {
     // Security logging must not block the student's visible result.
+  }
+}
+
+async function touchStudentAttendanceDevice(input: {
+  organizationId: string;
+  attendanceSessionId: string;
+  studentUserId: string;
+  studentMembershipId: string;
+  fingerprintHash: string | null;
+  userAgentSummary: string | null;
+}) {
+  if (!input.fingerprintHash) {
+    return {
+      isNewDevice: false,
+    };
+  }
+
+  try {
+    const existingDevice = await db.attendanceDevice.findUnique({
+      where: {
+        organizationId_userId_fingerprintHash: {
+          organizationId: input.organizationId,
+          userId: input.studentUserId,
+          fingerprintHash: input.fingerprintHash,
+        },
+      },
+      select: {
+        id: true,
+      },
+    });
+
+    if (existingDevice) {
+      await db.attendanceDevice.update({
+        where: {
+          id: existingDevice.id,
+        },
+        data: {
+          lastSeenAt: new Date(),
+          userAgentSummary: input.userAgentSummary,
+        },
+      });
+
+      return {
+        isNewDevice: false,
+      };
+    }
+
+    const device = await db.attendanceDevice.create({
+      data: {
+        organizationId: input.organizationId,
+        userId: input.studentUserId,
+        fingerprintHash: input.fingerprintHash,
+        userAgentSummary: input.userAgentSummary,
+      },
+      select: {
+        id: true,
+      },
+    });
+
+    await createSecurityAlert({
+      organizationId: input.organizationId,
+      attendanceSessionId: input.attendanceSessionId,
+      studentUserId: input.studentUserId,
+      studentMembershipId: input.studentMembershipId,
+      alertType: AttendanceAlertType.DEVICE_REGISTERED,
+      metadata: {
+        deviceId: device.id,
+      },
+    });
+
+    return {
+      isNewDevice: true,
+    };
+  } catch {
+    return {
+      isNewDevice: false,
+    };
+  }
+}
+
+function getMetadataString(
+  metadata: Prisma.JsonValue | null,
+  key: string,
+) {
+  if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) {
+    return null;
+  }
+
+  const value = metadata[key];
+
+  return typeof value === "string" ? value : null;
+}
+
+async function logTokenAttemptAndMaybeRevoke(input: {
+  organizationId: string;
+  attendanceSessionId: string;
+  qrTokenId: string;
+  studentUserId: string;
+  studentMembershipId: string;
+  fingerprintHash: string | null;
+  now: Date;
+}) {
+  try {
+    await db.auditLog.create({
+      data: {
+        organizationId: input.organizationId,
+        actorUserId: input.studentUserId,
+        action: "qr_token.attempt",
+        targetType: "QRToken",
+        targetId: input.qrTokenId,
+        metadata: {
+          attendanceSessionId: input.attendanceSessionId,
+          studentMembershipId: input.studentMembershipId,
+          deviceFingerprintHash: input.fingerprintHash,
+        },
+      },
+    });
+
+    const recentAttempts = await db.auditLog.findMany({
+      where: {
+        organizationId: input.organizationId,
+        action: "qr_token.attempt",
+        targetType: "QRToken",
+        targetId: input.qrTokenId,
+        createdAt: {
+          gte: new Date(input.now.getTime() - TOKEN_REUSE_WINDOW_MS),
+        },
+      },
+      select: {
+        actorUserId: true,
+        metadata: true,
+      },
+    });
+    const distinctUserDeviceKeys = new Set(
+      recentAttempts.map((attempt) => {
+        const fingerprintHash = getMetadataString(
+          attempt.metadata,
+          "deviceFingerprintHash",
+        );
+
+        return `${attempt.actorUserId ?? "unknown"}:${fingerprintHash ?? "unknown_device"}`;
+      }),
+    );
+
+    if (distinctUserDeviceKeys.size <= TOKEN_REUSE_DISTINCT_LIMIT) {
+      return false;
+    }
+
+    await db.$transaction([
+      db.qRToken.updateMany({
+        where: {
+          id: input.qrTokenId,
+          organizationId: input.organizationId,
+          revokedAt: null,
+        },
+        data: {
+          revokedAt: input.now,
+        },
+      }),
+      db.attendanceAlert.create({
+        data: {
+          organizationId: input.organizationId,
+          attendanceSessionId: input.attendanceSessionId,
+          studentUserId: input.studentUserId,
+          studentMembershipId: input.studentMembershipId,
+          alertType: AttendanceAlertType.SUSPICIOUS_TOKEN_REUSE,
+          severity: AttendanceAlertSeverity.HIGH,
+          message: getSecurityAlertMessage(
+            AttendanceAlertType.SUSPICIOUS_TOKEN_REUSE,
+          ),
+        },
+      }),
+    ]);
+
+    return true;
+  } catch {
+    return false;
   }
 }
 
@@ -390,6 +662,35 @@ export async function submitStudentAttendanceAction(
       });
     }
 
+    const requestMetadata = await getRequestMetadata();
+    const deviceFingerprintHash = createDeviceFingerprintHash({
+      organizationId: authContext.activeOrganization.id,
+      requestUserAgent: requestMetadata.userAgent,
+      device: input.device,
+    });
+    const userAgentSummary = summarizeUserAgent(
+      requestMetadata.userAgent ?? input.device?.userAgent,
+    );
+    const tokenWasRevokedForReuse = await logTokenAttemptAndMaybeRevoke({
+      organizationId: authContext.activeOrganization.id,
+      attendanceSessionId: sessionId,
+      qrTokenId: qrToken.id,
+      studentUserId: authContext.user.id,
+      studentMembershipId: authContext.membership.id,
+      fingerprintHash: deviceFingerprintHash,
+      now,
+    });
+
+    if (tokenWasRevokedForReuse) {
+      return createActionResult({
+        ok: false,
+        code: "suspicious_token_reuse",
+        message:
+          "QR kod güvenlik nedeniyle iptal edildi. Öğretmeninizden yeni QR kod isteyin.",
+        sessionId,
+      });
+    }
+
     const enrollment = await db.enrollment.findUnique({
       where: {
         organizationId_sectionId_studentMembershipId: {
@@ -425,6 +726,15 @@ export async function submitStudentAttendanceAction(
       });
     }
 
+    await touchStudentAttendanceDevice({
+      organizationId: authContext.activeOrganization.id,
+      attendanceSessionId: sessionId,
+      studentUserId: authContext.user.id,
+      studentMembershipId: authContext.membership.id,
+      fingerprintHash: deviceFingerprintHash,
+      userAgentSummary,
+    });
+
     const existingRecord = await db.attendanceRecord.findUnique({
       where: {
         organizationId_attendanceSessionId_studentMembershipId: {
@@ -435,27 +745,44 @@ export async function submitStudentAttendanceAction(
       },
       select: {
         id: true,
+        deviceIdHash: true,
       },
     });
 
     if (existingRecord) {
+      const isMultiDeviceAttempt = Boolean(
+        deviceFingerprintHash &&
+          existingRecord.deviceIdHash &&
+          existingRecord.deviceIdHash !== deviceFingerprintHash,
+      );
+
       await createSecurityAlert({
         organizationId: authContext.activeOrganization.id,
         attendanceSessionId: sessionId,
         attendanceRecordId: existingRecord.id,
         studentUserId: authContext.user.id,
         studentMembershipId: authContext.membership.id,
-        alertType: AttendanceAlertType.DUPLICATE_CHECK_IN_ATTEMPT,
+        alertType: isMultiDeviceAttempt
+          ? AttendanceAlertType.MULTI_DEVICE_ATTEMPT
+          : AttendanceAlertType.DUPLICATE_CHECK_IN_ATTEMPT,
+        message: isMultiDeviceAttempt
+          ? "Öğrenci aynı oturum için farklı bir cihazdan tekrar deneme yaptı."
+          : undefined,
         metadata: {
           qrTokenId: qrToken.id,
           existingRecordId: existingRecord.id,
+          multiDeviceAttempt: isMultiDeviceAttempt,
         },
       });
 
       return createActionResult({
-        ok: true,
-        code: "already_checked_in",
-        message: "Yoklamanız daha önce alınmış.",
+        ok: !isMultiDeviceAttempt,
+        code: isMultiDeviceAttempt
+          ? "multi_device_attempt"
+          : "already_checked_in",
+        message: isMultiDeviceAttempt
+          ? "Yoklamanız daha önce farklı bir cihazdan alınmış görünüyor."
+          : "Yoklamanız daha önce alınmış.",
         recordId: existingRecord.id,
         sessionId,
       });
@@ -488,7 +815,6 @@ export async function submitStudentAttendanceAction(
     );
     const roundedDistanceMeters = Math.round(distanceMeters * 100) / 100;
     const isInsideGeofence = distanceMeters <= geofence.radiusMeters;
-    const requestMetadata = await getRequestMetadata();
     const locationAccuracyMeters = normalizeAccuracyMeters(input.accuracyMeters);
     const hasLowAccuracy =
       locationAccuracyMeters === null ||
@@ -528,12 +854,14 @@ export async function submitStudentAttendanceAction(
         },
         select: {
           id: true,
+          deviceIdHash: true,
         },
       });
 
       if (recordCreatedDuringRace) {
         return {
           duplicateRecordId: recordCreatedDuringRace.id,
+          duplicateRecordDeviceIdHash: recordCreatedDuringRace.deviceIdHash,
           recordId: null,
         };
       }
@@ -558,6 +886,7 @@ export async function submitStudentAttendanceAction(
           locationAccuracyMeters,
           distanceMeters: roundedDistanceMeters,
           rejectionReason,
+          deviceIdHash: deviceFingerprintHash,
           deviceUserAgent: requestMetadata.userAgent,
           ipAddress: requestMetadata.ipAddress,
         },
@@ -606,6 +935,7 @@ export async function submitStudentAttendanceAction(
 
       return {
         duplicateRecordId: null,
+        duplicateRecordDeviceIdHash: null,
         recordId: record.id,
       };
     });
@@ -617,24 +947,40 @@ export async function submitStudentAttendanceAction(
     revalidatePath(routes.instructor.sessions);
 
     if (transactionResult.duplicateRecordId) {
+      const isMultiDeviceAttempt = Boolean(
+        deviceFingerprintHash &&
+          transactionResult.duplicateRecordDeviceIdHash &&
+          transactionResult.duplicateRecordDeviceIdHash !== deviceFingerprintHash,
+      );
+
       await createSecurityAlert({
         organizationId: authContext.activeOrganization.id,
         attendanceSessionId: sessionId,
         attendanceRecordId: transactionResult.duplicateRecordId,
         studentUserId: authContext.user.id,
         studentMembershipId: authContext.membership.id,
-        alertType: AttendanceAlertType.DUPLICATE_CHECK_IN_ATTEMPT,
+        alertType: isMultiDeviceAttempt
+          ? AttendanceAlertType.MULTI_DEVICE_ATTEMPT
+          : AttendanceAlertType.DUPLICATE_CHECK_IN_ATTEMPT,
+        message: isMultiDeviceAttempt
+          ? "Öğrenci aynı oturum için farklı bir cihazdan tekrar deneme yaptı."
+          : undefined,
         metadata: {
           qrTokenId: qrToken.id,
           existingRecordId: transactionResult.duplicateRecordId,
           raceDetected: true,
+          multiDeviceAttempt: isMultiDeviceAttempt,
         },
       });
 
       return createActionResult({
-        ok: true,
-        code: "already_checked_in",
-        message: "Yoklamanız daha önce alınmış.",
+        ok: !isMultiDeviceAttempt,
+        code: isMultiDeviceAttempt
+          ? "multi_device_attempt"
+          : "already_checked_in",
+        message: isMultiDeviceAttempt
+          ? "Yoklamanız daha önce farklı bir cihazdan alınmış görünüyor."
+          : "Yoklamanız daha önce alınmış.",
         recordId: transactionResult.duplicateRecordId,
         sessionId,
       });

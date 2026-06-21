@@ -169,8 +169,8 @@ export default async function InstructorDashboardPage() {
         }
       >
         {data.recentSessions.length > 0 ? (
-          <div className="overflow-hidden rounded-lg border border-neutral-200">
-            <table className="w-full border-collapse text-left text-sm">
+          <div className="overflow-x-auto rounded-lg border border-neutral-200">
+            <table className="w-full min-w-[820px] border-collapse text-left text-sm">
               <thead className="bg-neutral-50 text-xs font-medium uppercase tracking-normal text-neutral-500">
                 <tr>
                   <th className="px-4 py-3">Ders/Şube</th>
@@ -278,7 +278,7 @@ export default async function InstructorDashboardPage() {
                   </p>
                   <p className="mt-1 text-sm text-neutral-600">
                     {alert.studentUser?.name ?? "Bilinmeyen öğrenci"} ·{" "}
-                    {alert.studentUser?.email ?? "Email yok"}
+                    {alert.studentUser?.email ?? "E-posta yok"}
                   </p>
                   <p className="mt-1 text-xs text-neutral-500">
                     {formatSectionLabel(alert.attendanceSession)} ·{" "}

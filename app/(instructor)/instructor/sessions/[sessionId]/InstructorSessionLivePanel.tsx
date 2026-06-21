@@ -86,6 +86,7 @@ function buildCsvRows(data: InstructorSessionLiveData): AttendanceReportCsvRow[]
     locationVerification: row.rejectionReason
       ? `${row.locationVerification} - ${row.rejectionReason}`
       : row.locationVerification,
+    securityReason: row.securityReason,
   }));
 }
 
@@ -250,11 +251,11 @@ export function InstructorSessionLivePanel({
           }
         >
           {data.securityAlerts.length > 0 ? (
-            <div className="overflow-hidden rounded-lg border border-neutral-200">
-              <table className="w-full border-collapse text-left text-sm">
+            <div className="overflow-x-auto rounded-lg border border-neutral-200">
+              <table className="w-full min-w-[760px] border-collapse text-left text-sm">
                 <thead className="bg-neutral-50 text-xs font-medium uppercase tracking-normal text-neutral-500">
                   <tr>
-                    <th className="px-4 py-3">Öğrenci / Email</th>
+                    <th className="px-4 py-3">Öğrenci / E-posta</th>
                     <th className="px-4 py-3">Olay tipi</th>
                     <th className="px-4 py-3">Zaman</th>
                     <th className="px-4 py-3">Açıklama</th>
@@ -309,16 +310,17 @@ export function InstructorSessionLivePanel({
         {data.reportRows.length > 0 ? (
           <>
             <div className="hidden overflow-x-auto rounded-lg border border-neutral-200 lg:block">
-              <table className="w-full border-collapse text-left text-sm">
+              <table className="w-full min-w-[1040px] border-collapse text-left text-sm">
                 <thead className="bg-neutral-50 text-xs font-medium uppercase tracking-normal text-neutral-500">
                   <tr>
                     <th className="px-4 py-3">Öğrenci adı</th>
-                    <th className="px-4 py-3">Email</th>
+                    <th className="px-4 py-3">E-posta</th>
                     <th className="px-4 py-3">Ders/Şube</th>
                     <th className="px-4 py-3">Durum</th>
                     <th className="px-4 py-3">Giriş zamanı</th>
                     <th className="px-4 py-3">Mesafe</th>
                     <th className="px-4 py-3">Konum doğrulama sonucu</th>
+                    <th className="px-4 py-3">Güvenlik nedeni</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-neutral-100 bg-white">
@@ -357,6 +359,9 @@ export function InstructorSessionLivePanel({
                             </p>
                           ) : null}
                         </div>
+                      </td>
+                      <td className="px-4 py-4 text-neutral-600">
+                        {row.securityReason}
                       </td>
                     </tr>
                   ))}
@@ -419,6 +424,12 @@ export function InstructorSessionLivePanel({
                             </p>
                           ) : null}
                         </div>
+                      </dd>
+                    </div>
+                    <div>
+                      <dt className="text-neutral-500">Güvenlik nedeni</dt>
+                      <dd className="mt-1 font-medium text-neutral-900">
+                        {row.securityReason}
                       </dd>
                     </div>
                   </dl>

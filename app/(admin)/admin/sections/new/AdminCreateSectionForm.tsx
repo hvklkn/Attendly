@@ -12,8 +12,10 @@ import { routes } from "@/constants/routes";
 import { createAdminSectionAction } from "@/lib/admin/section-actions";
 import {
   initialAdminSectionCreateActionState,
+  type AdminSectionCreateActionState,
   type AdminSectionCreateFormErrors,
   type AdminSectionCreateFormField,
+  type AdminSectionCreateFormValues,
   type AdminSectionCreateOptionsData,
 } from "@/lib/admin/section-create";
 import { getRoleLabel } from "@/lib/localization";
@@ -61,7 +63,18 @@ function Field({
   );
 }
 
-function SubmitButton({ disabled }: { disabled: boolean }) {
+type SectionFormAction = (
+  previousState: AdminSectionCreateActionState,
+  formData: FormData,
+) => Promise<AdminSectionCreateActionState>;
+
+function SubmitButton({
+  disabled,
+  label,
+}: {
+  disabled: boolean;
+  label: string;
+}) {
   const { pending } = useFormStatus();
 
   return (
@@ -70,7 +83,7 @@ function SubmitButton({ disabled }: { disabled: boolean }) {
       disabled={disabled || pending}
       className="inline-flex h-9 items-center justify-center rounded-md bg-neutral-950 px-4 text-sm font-medium text-white transition hover:bg-neutral-800 disabled:cursor-not-allowed disabled:bg-neutral-200 disabled:text-neutral-500"
     >
-      {pending ? "Oluşturuluyor..." : "Ders Grubu Oluştur"}
+      {pending ? "Kaydediliyor..." : label}
     </button>
   );
 }
@@ -81,12 +94,25 @@ function formatPerson(user: { name: string | null; email: string }) {
 
 export function AdminCreateSectionForm({
   options,
+  action,
+  initialValues,
+  sectionId,
+  submitLabel = "Ders Grubu Oluştur",
 }: {
   options: AdminSectionCreateOptionsData;
+  action?: SectionFormAction;
+  initialValues?: AdminSectionCreateFormValues;
+  sectionId?: string;
+  submitLabel?: string;
 }) {
   const [state, formAction] = useActionState(
-    createAdminSectionAction,
-    initialAdminSectionCreateActionState,
+    action ?? createAdminSectionAction,
+    initialValues
+      ? {
+          ...initialAdminSectionCreateActionState,
+          values: initialValues,
+        }
+      : initialAdminSectionCreateActionState,
   );
   const { values, errors } = state;
   const hasCourses = options.courses.length > 0;
@@ -96,6 +122,9 @@ export function AdminCreateSectionForm({
   return (
     <section className="grid gap-6 xl:grid-cols-[1fr_360px]">
       <form action={formAction} className="grid gap-6">
+        {sectionId ? (
+          <input type="hidden" name="sectionId" value={sectionId} />
+        ) : null}
         {state.status === "error" && state.message ? (
           <div
             role="alert"
@@ -108,7 +137,7 @@ export function AdminCreateSectionForm({
         {!hasRequiredData ? (
           <SectionCard
             title="Ön koşullar eksik"
-            description="Ders grubu oluşturmak için aktif ders / kurs ve aktif sorumlu kişi gerekir."
+            description="Ders grubu oluşturmak için aktif ders / kurs ve aktif öğretmen gerekir."
           >
             <div className="grid gap-4 md:grid-cols-2">
               {!hasCourses ? (
@@ -135,7 +164,7 @@ export function AdminCreateSectionForm({
 
         <SectionCard
           title="Ders Grubu"
-          description="Ders grubu, bir ders / kurs ve bir sorumlu kişi ile oluşturulur."
+          description="Ders grubu, bir ders / kurs ve en az bir öğretmen atamasıyla oluşturulur."
           actions={
             <div className="flex h-9 w-9 items-center justify-center rounded-md bg-neutral-100 text-neutral-600">
               <BookOpen className="h-4 w-4" aria-hidden="true" />
@@ -175,7 +204,7 @@ export function AdminCreateSectionForm({
 
             <Field
               id="instructor-membership-id"
-              label="Sorumlu Kişi"
+              label="Öğretmen"
               description="Öğretmen veya kurum yöneticisi seçin."
               error={getFieldError(errors, "instructorMembershipId")}
             >
@@ -290,7 +319,7 @@ export function AdminCreateSectionForm({
           </div>
           <div className="flex flex-wrap gap-3">
             <ButtonLink href={routes.admin.sections}>İptal</ButtonLink>
-            <SubmitButton disabled={!hasRequiredData} />
+            <SubmitButton disabled={!hasRequiredData} label={submitLabel} />
           </div>
         </div>
       </form>
@@ -298,7 +327,7 @@ export function AdminCreateSectionForm({
       <aside className="grid gap-6 self-start">
         <SectionCard
           title="Atama Kuralı"
-          description="MVP modelinde her ders grubunun bir atanmış sorumlusu vardır."
+          description="Şube oluşturulurken seçilen öğretmen ilk aktif atama olarak kaydedilir."
           actions={
             <div className="flex h-9 w-9 items-center justify-center rounded-md bg-neutral-100 text-neutral-600">
               <Info className="h-4 w-4" aria-hidden="true" />
@@ -317,7 +346,7 @@ export function AdminCreateSectionForm({
             </div>
             <div className="flex items-center justify-between gap-3">
               <span className="text-sm font-medium text-neutral-700">
-                Sorumlu Kişi
+                Öğretmen
               </span>
               <StatusBadge
                 label={String(options.responsibleCandidates.length)}
@@ -327,7 +356,7 @@ export function AdminCreateSectionForm({
           </div>
           <p className="mt-5 text-sm leading-6 text-neutral-600">
             Bir öğrenci birden fazla ders grubuna kayıt edilerek birden fazla
-            sorumlu kişinin derslerine bağlanabilir.
+            atanmış öğretmenin derslerine bağlanabilir.
           </p>
         </SectionCard>
       </aside>

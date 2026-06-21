@@ -1,10 +1,14 @@
-import { BookOpen, Plus, Search } from "lucide-react";
+import { BookOpen, Pencil, Plus, Search } from "lucide-react";
 import { ButtonLink } from "@/components/ui/ButtonLink";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { routes } from "@/constants/routes";
+import {
+  deactivateAdminCourseAction,
+  reactivateAdminCourseAction,
+} from "@/lib/admin/course-actions";
 import { requireAdminAuthContext } from "@/lib/admin/auth";
 import { getAdminCoursesData } from "@/lib/admin/queries";
 
@@ -12,6 +16,10 @@ type AdminCoursesPageProps = {
   searchParams?: Promise<{
     q?: string | string[];
     created?: string | string[];
+    updated?: string | string[];
+    deactivated?: string | string[];
+    reactivated?: string | string[];
+    error?: string | string[];
   }>;
 };
 
@@ -30,6 +38,12 @@ export default async function AdminCoursesPage({
   const resolvedSearchParams = await searchParams;
   const query = getSearchValue(resolvedSearchParams?.q).trim();
   const created = getSearchValue(resolvedSearchParams?.created) === "1";
+  const updated = getSearchValue(resolvedSearchParams?.updated) === "1";
+  const deactivated =
+    getSearchValue(resolvedSearchParams?.deactivated) === "1";
+  const reactivated =
+    getSearchValue(resolvedSearchParams?.reactivated) === "1";
+  const errorMessage = getSearchValue(resolvedSearchParams?.error);
   const courses = await getAdminCoursesData(authContext, { query });
 
   return (
@@ -51,6 +65,16 @@ export default async function AdminCoursesPage({
       {created ? (
         <div className="rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-700">
           Ders / kurs oluşturuldu.
+        </div>
+      ) : null}
+      {updated || deactivated || reactivated ? (
+        <div className="rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-700">
+          Ders / kurs güncellendi.
+        </div>
+      ) : null}
+      {errorMessage ? (
+        <div className="rounded-md border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-700">
+          {errorMessage}
         </div>
       ) : null}
 
@@ -92,6 +116,7 @@ export default async function AdminCoursesPage({
                     <th className="px-4 py-3">Açıklama</th>
                     <th className="px-4 py-3">Ders Grubu</th>
                     <th className="px-4 py-3">Durum</th>
+                    <th className="px-4 py-3">İşlem</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-neutral-100 bg-white">
@@ -114,6 +139,31 @@ export default async function AdminCoursesPage({
                           label={course.isActive ? "Aktif" : "Pasif"}
                           tone={course.isActive ? "success" : "neutral"}
                         />
+                      </td>
+                      <td className="px-4 py-4">
+                        <div className="flex flex-wrap gap-2">
+                          <ButtonLink
+                            href={`/admin/courses/${course.id}/edit`}
+                            icon={<Pencil className="h-4 w-4" aria-hidden="true" />}
+                          >
+                            Düzenle
+                          </ButtonLink>
+                          <form
+                            action={
+                              course.isActive
+                                ? deactivateAdminCourseAction
+                                : reactivateAdminCourseAction
+                            }
+                          >
+                            <input type="hidden" name="courseId" value={course.id} />
+                            <button
+                              type="submit"
+                              className="inline-flex h-9 items-center justify-center rounded-md border border-neutral-300 bg-white px-3 text-sm font-medium text-neutral-700 transition hover:border-neutral-400 hover:text-neutral-950"
+                            >
+                              {course.isActive ? "Pasifleştir" : "Tekrar Aktifleştir"}
+                            </button>
+                          </form>
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -144,6 +194,29 @@ export default async function AdminCoursesPage({
                   <p className="mt-3 text-sm text-neutral-500">
                     {course._count.sections} ders grubu
                   </p>
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    <ButtonLink
+                      href={`/admin/courses/${course.id}/edit`}
+                      icon={<Pencil className="h-4 w-4" aria-hidden="true" />}
+                    >
+                      Düzenle
+                    </ButtonLink>
+                    <form
+                      action={
+                        course.isActive
+                          ? deactivateAdminCourseAction
+                          : reactivateAdminCourseAction
+                      }
+                    >
+                      <input type="hidden" name="courseId" value={course.id} />
+                      <button
+                        type="submit"
+                        className="inline-flex h-9 items-center justify-center rounded-md border border-neutral-300 bg-white px-3 text-sm font-medium text-neutral-700 transition hover:border-neutral-400 hover:text-neutral-950"
+                      >
+                        {course.isActive ? "Pasifleştir" : "Tekrar Aktifleştir"}
+                      </button>
+                    </form>
+                  </div>
                 </article>
               ))}
             </div>

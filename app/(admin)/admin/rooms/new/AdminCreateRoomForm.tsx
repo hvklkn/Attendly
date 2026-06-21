@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useState } from "react";
 import type { ReactNode } from "react";
 import { useFormStatus } from "react-dom";
 import { CheckCircle2, Info, MapPin } from "lucide-react";
@@ -10,8 +10,10 @@ import { routes } from "@/constants/routes";
 import { createAdminRoomAction } from "@/lib/admin/room-actions";
 import {
   initialAdminRoomCreateActionState,
+  type AdminRoomCreateActionState,
   type AdminRoomCreateFormErrors,
   type AdminRoomCreateFormField,
+  type AdminRoomCreateFormValues,
 } from "@/lib/admin/room-create";
 
 const inputClassName =
@@ -54,7 +56,12 @@ function Field({
   );
 }
 
-function SubmitButton() {
+type RoomFormAction = (
+  previousState: AdminRoomCreateActionState,
+  formData: FormData,
+) => Promise<AdminRoomCreateActionState>;
+
+function SubmitButton({ label }: { label: string }) {
   const { pending } = useFormStatus();
 
   return (
@@ -63,21 +70,83 @@ function SubmitButton() {
       disabled={pending}
       className="inline-flex h-9 items-center justify-center rounded-md bg-neutral-950 px-4 text-sm font-medium text-white transition hover:bg-neutral-800 disabled:cursor-not-allowed disabled:bg-neutral-200 disabled:text-neutral-500"
     >
-      {pending ? "Oluşturuluyor..." : "Oda Oluştur"}
+      {pending ? "Kaydediliyor..." : label}
     </button>
   );
 }
 
-export function AdminCreateRoomForm() {
+export function AdminCreateRoomForm({
+  action,
+  initialValues,
+  roomId,
+  submitLabel = "Oda Oluştur",
+}: {
+  action?: RoomFormAction;
+  initialValues?: AdminRoomCreateFormValues;
+  roomId?: string;
+  submitLabel?: string;
+}) {
   const [state, formAction] = useActionState(
-    createAdminRoomAction,
-    initialAdminRoomCreateActionState,
+    action ?? createAdminRoomAction,
+    initialValues
+      ? {
+          ...initialAdminRoomCreateActionState,
+          values: initialValues,
+        }
+      : initialAdminRoomCreateActionState,
   );
   const { values, errors } = state;
+  const [latitude, setLatitude] = useState(values.latitude);
+  const [longitude, setLongitude] = useState(values.longitude);
+  const [locationMessage, setLocationMessage] = useState<string | null>(null);
+  const [locationError, setLocationError] = useState<string | null>(null);
+  const [isCapturingLocation, setIsCapturingLocation] = useState(false);
+
+  function captureCurrentLocation() {
+    setLocationMessage(null);
+    setLocationError(null);
+
+    if (!navigator.geolocation) {
+      setLocationError("Tarayıcınız konum almayı desteklemiyor.");
+      return;
+    }
+
+    setIsCapturingLocation(true);
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const nextLatitude = position.coords.latitude.toFixed(6);
+        const nextLongitude = position.coords.longitude.toFixed(6);
+        const accuracy = Number.isFinite(position.coords.accuracy)
+          ? Math.round(position.coords.accuracy)
+          : null;
+
+        setLatitude(nextLatitude);
+        setLongitude(nextLongitude);
+        setLocationMessage(
+          `Konum alındı: ${nextLatitude}, ${nextLongitude}, doğruluk: ${
+            accuracy ?? "belirtilmedi"
+          } metre`,
+        );
+        setIsCapturingLocation(false);
+      },
+      () => {
+        setLocationError(
+          "Konum alınamadı. Tarayıcı konum iznini kontrol edip tekrar deneyin.",
+        );
+        setIsCapturingLocation(false);
+      },
+      {
+        enableHighAccuracy: true,
+        maximumAge: 0,
+        timeout: 15000,
+      },
+    );
+  }
 
   return (
     <section className="grid gap-6 xl:grid-cols-[1fr_360px]">
       <form action={formAction} className="grid gap-6">
+        {roomId ? <input type="hidden" name="roomId" value={roomId} /> : null}
         {state.status === "error" && state.message ? (
           <div
             role="alert"
@@ -189,6 +258,31 @@ export function AdminCreateRoomForm() {
           title="Konum"
           description="Koordinatlar girilirse yoklama geofence yedeği olarak kullanılabilir."
         >
+          <div className="mb-5 grid gap-3 rounded-md border border-sky-200 bg-sky-50 p-4 text-sm leading-6 text-sky-900">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <p>
+                Koordinatları otomatik doldurmak için yalnızca konum izni
+                istenir; kamera izni istenmez.
+              </p>
+              <button
+                type="button"
+                onClick={captureCurrentLocation}
+                disabled={isCapturingLocation}
+                className="inline-flex h-9 items-center justify-center rounded-md bg-neutral-950 px-3 text-sm font-medium text-white transition hover:bg-neutral-800 disabled:cursor-not-allowed disabled:bg-neutral-300 disabled:text-neutral-500"
+              >
+                {isCapturingLocation
+                  ? "Konum alınıyor..."
+                  : "Mevcut konumumu kullan"}
+              </button>
+            </div>
+            {locationMessage ? (
+              <p className="font-medium text-emerald-800">{locationMessage}</p>
+            ) : null}
+            {locationError ? (
+              <p className="font-medium text-rose-700">{locationError}</p>
+            ) : null}
+          </div>
+
           <div className="grid gap-5 md:grid-cols-3">
             <Field
               id="latitude"
@@ -203,7 +297,10 @@ export function AdminCreateRoomForm() {
                 min="-90"
                 max="90"
                 placeholder="41.008240"
-                defaultValue={values.latitude}
+                value={latitude}
+                onChange={(event) => {
+                  setLatitude(event.target.value);
+                }}
                 aria-invalid={Boolean(getFieldError(errors, "latitude"))}
                 aria-describedby={
                   getFieldError(errors, "latitude")
@@ -227,7 +324,10 @@ export function AdminCreateRoomForm() {
                 min="-180"
                 max="180"
                 placeholder="28.978359"
-                defaultValue={values.longitude}
+                value={longitude}
+                onChange={(event) => {
+                  setLongitude(event.target.value);
+                }}
                 aria-invalid={Boolean(getFieldError(errors, "longitude"))}
                 aria-describedby={
                   getFieldError(errors, "longitude")
@@ -304,7 +404,7 @@ export function AdminCreateRoomForm() {
           </div>
           <div className="flex flex-wrap gap-3">
             <ButtonLink href={routes.admin.rooms}>İptal</ButtonLink>
-            <SubmitButton />
+            <SubmitButton label={submitLabel} />
           </div>
         </div>
       </form>

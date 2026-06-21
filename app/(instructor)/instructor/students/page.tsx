@@ -1,4 +1,4 @@
-import { FileUp, Search, UserPlus, Users } from "lucide-react";
+import { FileUp, Pencil, Search, UserPlus, Users } from "lucide-react";
 import { ButtonLink } from "@/components/ui/ButtonLink";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { PageHeader } from "@/components/ui/PageHeader";
@@ -9,8 +9,10 @@ import { requireInstructorAuthContext } from "@/lib/instructor/auth";
 import {
   assignInstructorStudentToSectionAction,
   deactivateInstructorEnrollmentAction,
+  reactivateInstructorEnrollmentAction,
 } from "@/lib/instructor/student-actions";
 import { getInstructorStudentsData } from "@/lib/instructor/queries";
+import { EnrollmentStatus } from "@/lib/generated/prisma/enums";
 import {
   formatDateTr,
   getEnrollmentStatusLabel,
@@ -20,11 +22,16 @@ import {
 type InstructorStudentsPageProps = {
   searchParams?: Promise<{
     q?: string | string[];
+    sectionId?: string | string[];
+    enrollmentStatus?: string | string[];
     created?: string | string[];
+    updated?: string | string[];
     assigned?: string | string[];
     deactivated?: string | string[];
+    reactivated?: string | string[];
     assignError?: string | string[];
     deactivateError?: string | string[];
+    reactivateError?: string | string[];
   }>;
 };
 
@@ -63,6 +70,22 @@ function getSearchValue(value: string | string[] | undefined) {
   }
 
   return value ?? "";
+}
+
+function getEnrollmentStatusFilter(value: string | string[] | undefined) {
+  const status = getSearchValue(value);
+
+  if (
+    status === EnrollmentStatus.ACTIVE ||
+    status === EnrollmentStatus.INACTIVE ||
+    status === EnrollmentStatus.COMPLETED ||
+    status === EnrollmentStatus.WITHDRAWN ||
+    status === EnrollmentStatus.SUSPENDED
+  ) {
+    return status;
+  }
+
+  return undefined;
 }
 
 function getInitials(name: string | null, email: string) {
@@ -149,6 +172,16 @@ function EnrollmentList({ enrollments }: { enrollments: EnrollmentSummary[] }) {
                 Şubeden Çıkar
               </button>
             </form>
+          ) : enrollment.status === "INACTIVE" ? (
+            <form action={reactivateInstructorEnrollmentAction} className="mt-3">
+              <input type="hidden" name="enrollmentId" value={enrollment.id} />
+              <button
+                type="submit"
+                className="inline-flex h-8 items-center justify-center rounded-md border border-neutral-300 bg-white px-3 text-xs font-medium text-neutral-700 transition hover:border-neutral-400 hover:text-neutral-950"
+              >
+                Tekrar Aktif Yap
+              </button>
+            </form>
           ) : null}
         </div>
       ))}
@@ -202,17 +235,29 @@ export default async function InstructorStudentsPage({
   const authContext = await requireInstructorAuthContext();
   const resolvedSearchParams = await searchParams;
   const query = getSearchValue(resolvedSearchParams?.q).trim();
+  const sectionId = getSearchValue(resolvedSearchParams?.sectionId).trim();
+  const enrollmentStatus = getEnrollmentStatusFilter(
+    resolvedSearchParams?.enrollmentStatus,
+  );
   const created = getSearchValue(resolvedSearchParams?.created) === "1";
+  const updated = getSearchValue(resolvedSearchParams?.updated) === "1";
   const assigned = getSearchValue(resolvedSearchParams?.assigned) === "1";
   const deactivated =
     getSearchValue(resolvedSearchParams?.deactivated) === "1";
+  const reactivated =
+    getSearchValue(resolvedSearchParams?.reactivated) === "1";
   const assignError =
     getSearchValue(resolvedSearchParams?.assignError) === "1";
   const deactivateError =
     getSearchValue(resolvedSearchParams?.deactivateError) === "1";
+  const reactivateError =
+    getSearchValue(resolvedSearchParams?.reactivateError) === "1";
   const { students, sections } = await getInstructorStudentsData(authContext, {
     query,
+    sectionId,
+    enrollmentStatus,
   });
+  const hasFilters = Boolean(query || sectionId || enrollmentStatus);
 
   return (
     <>
@@ -223,16 +268,28 @@ export default async function InstructorStudentsPage({
       >
         <ButtonLink
           href={routes.instructor.studentCreate}
-          variant="primary"
+          variant="secondary"
           icon={<UserPlus className="h-4 w-4" aria-hidden="true" />}
         >
           Öğrenci Ekle
+        </ButtonLink>
+        <ButtonLink
+          href={routes.instructor.studentImport}
+          variant="primary"
+          icon={<FileUp className="h-4 w-4" aria-hidden="true" />}
+        >
+          CSV ile Yükle
         </ButtonLink>
       </PageHeader>
 
       {created ? (
         <div className="rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-700">
           Öğrenci bu ders grubuna eklendi.
+        </div>
+      ) : null}
+      {updated ? (
+        <div className="rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-700">
+          Öğrenci bilgileri güncellendi.
         </div>
       ) : null}
       {assigned ? (
@@ -245,7 +302,12 @@ export default async function InstructorStudentsPage({
           Öğrencinin şube kaydı pasifleştirildi.
         </div>
       ) : null}
-      {assignError || deactivateError ? (
+      {reactivated ? (
+        <div className="rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-700">
+          Öğrencinin şube kaydı tekrar aktif yapıldı.
+        </div>
+      ) : null}
+      {assignError || deactivateError || reactivateError ? (
         <div className="rounded-md border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-700">
           İşlem tamamlanamadı. Lütfen öğrenci ve şube seçimini kontrol edin.
         </div>
@@ -253,21 +315,20 @@ export default async function InstructorStudentsPage({
 
       <SectionCard
         title="CSV Aktarımı"
-        description="Öğrenci listesini CSV dosyasıyla toplu olarak aktarma özelliği sonraki adımda eklenecek."
+        description="Ad ve e-posta kolonlarını içeren CSV dosyasıyla öğrencileri toplu ekleyin; şube koduyla şubeye atayın."
         actions={
-          <button
-            type="button"
-            disabled
-            className="inline-flex h-9 cursor-not-allowed items-center justify-center gap-2 rounded-md border border-neutral-200 bg-neutral-50 px-3 text-sm font-medium text-neutral-400"
+          <ButtonLink
+            href={routes.instructor.studentImport}
+            variant="primary"
+            icon={<FileUp className="h-4 w-4" aria-hidden="true" />}
           >
-            <FileUp className="h-4 w-4" aria-hidden="true" />
             CSV ile Öğrenci Yükle
-          </button>
+          </ButtonLink>
         }
       >
         <p className="text-sm leading-6 text-neutral-600">
-          Toplu aktarım açıldığında öğrenciler yine kurumunuzdaki şubelere
-          kayıt edilecek.
+          Önizlemede hatalı satırlar, tekrarlanan e-posta ve bulunamayan şube
+          kodu değerleri gösterilir; onay vermeden kayıt oluşturulmaz.
         </p>
       </SectionCard>
 
@@ -277,7 +338,7 @@ export default async function InstructorStudentsPage({
       >
         <form
           action={routes.instructor.students}
-          className="mb-5 grid gap-3 lg:grid-cols-[1fr_120px]"
+          className="mb-5 grid gap-3 lg:grid-cols-[1fr_220px_180px_120px]"
         >
           <label className="flex items-center gap-2 rounded-md border border-neutral-300 bg-white px-3 py-2 text-sm text-neutral-500">
             <Search className="h-4 w-4" aria-hidden="true" />
@@ -288,6 +349,36 @@ export default async function InstructorStudentsPage({
               placeholder="Ad, e-posta veya şube ara"
               className="w-full bg-transparent outline-none placeholder:text-neutral-400"
             />
+          </label>
+          <label>
+            <span className="sr-only">Şube</span>
+            <select
+              name="sectionId"
+              defaultValue={sectionId}
+              className="h-10 w-full rounded-md border border-neutral-300 bg-white px-3 text-sm text-neutral-700 outline-none transition focus:border-neutral-500"
+            >
+              <option value="">Tüm şubeler</option>
+              {sections.map((section) => (
+                <option key={section.id} value={section.id}>
+                  {formatSectionOption(section)}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            <span className="sr-only">Kayıt durumu</span>
+            <select
+              name="enrollmentStatus"
+              defaultValue={enrollmentStatus ?? ""}
+              className="h-10 w-full rounded-md border border-neutral-300 bg-white px-3 text-sm text-neutral-700 outline-none transition focus:border-neutral-500"
+            >
+              <option value="">Tüm durumlar</option>
+              <option value={EnrollmentStatus.ACTIVE}>Aktif kayıt</option>
+              <option value={EnrollmentStatus.INACTIVE}>Pasif kayıt</option>
+              <option value={EnrollmentStatus.COMPLETED}>Tamamlandı</option>
+              <option value={EnrollmentStatus.WITHDRAWN}>Çekildi</option>
+              <option value={EnrollmentStatus.SUSPENDED}>Askıya alındı</option>
+            </select>
           </label>
           <button
             type="submit"
@@ -308,6 +399,7 @@ export default async function InstructorStudentsPage({
                     <th className="px-4 py-3">Kayıtlı Şubeler</th>
                     <th className="px-4 py-3">Hesap Durumu</th>
                     <th className="px-4 py-3">Şubeye Ata</th>
+                    <th className="px-4 py-3">İşlem</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-neutral-100 bg-white">
@@ -325,6 +417,11 @@ export default async function InstructorStudentsPage({
                             <p className="mt-1 text-xs text-neutral-500">
                               {student.user.email}
                             </p>
+                            {student.studentNo ? (
+                              <p className="mt-1 text-xs text-neutral-500">
+                                Öğrenci No: {student.studentNo}
+                              </p>
+                            ) : null}
                           </div>
                         </div>
                       </td>
@@ -342,6 +439,14 @@ export default async function InstructorStudentsPage({
                           studentMembershipId={student.id}
                           sections={sections}
                         />
+                      </td>
+                      <td className="px-4 py-4">
+                        <ButtonLink
+                          href={`/instructor/students/${student.id}/edit`}
+                          icon={<Pencil className="h-4 w-4" aria-hidden="true" />}
+                        >
+                          Düzenle
+                        </ButtonLink>
                       </td>
                     </tr>
                   ))}
@@ -366,6 +471,11 @@ export default async function InstructorStudentsPage({
                       <p className="mt-1 truncate text-sm text-neutral-500">
                         {student.user.email}
                       </p>
+                      {student.studentNo ? (
+                        <p className="mt-1 text-sm text-neutral-500">
+                          Öğrenci No: {student.studentNo}
+                        </p>
+                      ) : null}
                       <div className="mt-3">
                         <StatusBadge
                           label={getUserStatusLabel(student.user.status)}
@@ -386,6 +496,14 @@ export default async function InstructorStudentsPage({
                       sections={sections}
                     />
                   </div>
+                  <div className="mt-4">
+                    <ButtonLink
+                      href={`/instructor/students/${student.id}/edit`}
+                      icon={<Pencil className="h-4 w-4" aria-hidden="true" />}
+                    >
+                      Düzenle
+                    </ButtonLink>
+                  </div>
                 </article>
               ))}
             </div>
@@ -393,12 +511,12 @@ export default async function InstructorStudentsPage({
         ) : (
           <EmptyState
             title={
-              query
+              hasFilters
                 ? "Aramanızla eşleşen öğrenci yok"
                 : "Kurumda öğrenci yok"
             }
             description={
-              query
+              hasFilters
                 ? "Farklı bir arama terimi deneyin veya aramayı temizleyin."
                 : "Öğrenciler eklendiğinde burada listelenecek."
             }

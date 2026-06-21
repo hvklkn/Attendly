@@ -135,7 +135,7 @@ export function validateAdminSectionCreateFormValues(
   }
 
   if (!instructorMembershipId) {
-    errors.instructorMembershipId = "Sorumlu kişi seçilmelidir.";
+    errors.instructorMembershipId = "Öğretmen seçilmelidir.";
   }
 
   if (Object.keys(errors).length > 0) {

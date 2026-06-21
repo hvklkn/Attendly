@@ -33,6 +33,7 @@ export const getCurrentAuthContext = cache(async (): Promise<AuthContext | null>
           email: true,
           name: true,
           status: true,
+          mustChangePassword: true,
         },
       },
       organization: {

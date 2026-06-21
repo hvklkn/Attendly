@@ -1,4 +1,4 @@
-import { BookOpen, CalendarDays, Search, UserPlus, Users } from "lucide-react";
+import { BookOpen, CalendarDays, Pencil, Search, UserPlus, Users } from "lucide-react";
 import { ButtonLink } from "@/components/ui/ButtonLink";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { PageHeader } from "@/components/ui/PageHeader";
@@ -8,6 +8,9 @@ import { routes } from "@/constants/routes";
 import {
   assignAdminSectionInstructorAction,
   assignAdminSectionStudentAction,
+  deactivateAdminSectionAction,
+  reactivateAdminSectionAction,
+  unassignAdminSectionInstructorAction,
 } from "@/lib/admin/section-actions";
 import { requireAdminAuthContext } from "@/lib/admin/auth";
 import {
@@ -20,7 +23,12 @@ type AdminSectionsPageProps = {
   searchParams?: Promise<{
     q?: string | string[];
     created?: string | string[];
+    updated?: string | string[];
+    deactivated?: string | string[];
+    reactivated?: string | string[];
     assigned?: string | string[];
+    unassigned?: string | string[];
+    alreadyInstructorAssigned?: string | string[];
     studentAssigned?: string | string[];
     alreadyAssigned?: string | string[];
     error?: string | string[];
@@ -37,7 +45,7 @@ function getSearchValue(value: string | string[] | undefined) {
 
 function formatPerson(user: { name: string | null; email: string } | null) {
   if (!user) {
-    return "Sorumlu kişi henüz atanmadı";
+    return "Öğretmen henüz atanmadı";
   }
 
   return user.name ? `${user.name} · ${user.email}` : user.email;
@@ -47,7 +55,63 @@ function formatSectionName(section: { name: string; code: string | null }) {
   return section.code ? `${section.code} · ${section.name}` : section.name;
 }
 
-function AssignResponsibleForm({
+function AssignedTeachersList({
+  sectionId,
+  assignments,
+}: {
+  sectionId: string;
+  assignments: Array<{
+    instructorMembershipId: string;
+    instructorMembership: {
+      role: string;
+      user: {
+        name: string | null;
+        email: string;
+      };
+    };
+  }>;
+}) {
+  if (assignments.length === 0) {
+    return <p className="text-sm text-neutral-500">Atanmış öğretmen yok</p>;
+  }
+
+  return (
+    <div className="grid gap-2">
+      {assignments.map((assignment) => (
+        <div
+          key={assignment.instructorMembershipId}
+          className="rounded-md border border-neutral-200 bg-neutral-50 p-2"
+        >
+          <p className="text-sm font-medium text-neutral-900">
+            {formatPerson(assignment.instructorMembership.user)}
+          </p>
+          <p className="mt-0.5 text-xs text-neutral-500">
+            {getRoleLabel(assignment.instructorMembership.role)}
+          </p>
+          <form
+            action={unassignAdminSectionInstructorAction}
+            className="mt-2"
+          >
+            <input type="hidden" name="sectionId" value={sectionId} />
+            <input
+              type="hidden"
+              name="instructorMembershipId"
+              value={assignment.instructorMembershipId}
+            />
+            <button
+              type="submit"
+              className="inline-flex h-8 items-center justify-center rounded-md border border-neutral-300 bg-white px-3 text-xs font-medium text-neutral-700 transition hover:border-neutral-400 hover:text-neutral-950"
+            >
+              Şubeden Kaldır
+            </button>
+          </form>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function AssignTeacherForm({
   sectionId,
   responsibleCandidates,
 }: {
@@ -62,20 +126,20 @@ function AssignResponsibleForm({
   }>;
 }) {
   if (responsibleCandidates.length === 0) {
-    return <span>Sorumlu kişi henüz atanmadı</span>;
+    return <span className="text-sm text-neutral-500">Aktif öğretmen yok</span>;
   }
 
   return (
     <form action={assignAdminSectionInstructorAction} className="grid gap-2">
       <input type="hidden" name="sectionId" value={sectionId} />
       <label>
-        <span className="sr-only">Sorumlu Kişi Ata</span>
+        <span className="sr-only">Öğretmen Ata</span>
         <select
           name="instructorMembershipId"
           required
           className="h-9 w-full rounded-md border border-neutral-300 bg-white px-2 text-sm text-neutral-700 outline-none transition focus:border-neutral-500"
         >
-          <option value="">Sorumlu Kişi Ata</option>
+          <option value="">Öğretmen seçin</option>
           {responsibleCandidates.map((membership) => (
             <option key={membership.id} value={membership.id}>
               {formatPerson(membership.user)} · {getRoleLabel(membership.role)}
@@ -87,7 +151,7 @@ function AssignResponsibleForm({
         type="submit"
         className="inline-flex h-8 items-center justify-center rounded-md bg-neutral-950 px-3 text-xs font-medium text-white transition hover:bg-neutral-800"
       >
-        Sorumlu Ata
+        Öğretmen Ata
       </button>
     </form>
   );
@@ -145,7 +209,15 @@ export default async function AdminSectionsPage({
   const resolvedSearchParams = await searchParams;
   const query = getSearchValue(resolvedSearchParams?.q).trim();
   const created = getSearchValue(resolvedSearchParams?.created) === "1";
+  const updated = getSearchValue(resolvedSearchParams?.updated) === "1";
+  const deactivated =
+    getSearchValue(resolvedSearchParams?.deactivated) === "1";
+  const reactivated =
+    getSearchValue(resolvedSearchParams?.reactivated) === "1";
   const assigned = getSearchValue(resolvedSearchParams?.assigned) === "1";
+  const unassigned = getSearchValue(resolvedSearchParams?.unassigned) === "1";
+  const alreadyInstructorAssigned =
+    getSearchValue(resolvedSearchParams?.alreadyInstructorAssigned) === "1";
   const studentAssigned =
     getSearchValue(resolvedSearchParams?.studentAssigned) === "1";
   const alreadyAssigned =
@@ -161,7 +233,7 @@ export default async function AdminSectionsPage({
       <PageHeader
         eyebrow={authContext.activeOrganization.name}
         title="Ders Grupları"
-        description="Ders, sorumlu kişi ve öğrenci kayıtlarını aynı kurum kapsamında yönetin."
+        description="Öğretmenler yalnızca kendilerine atanmış şubeler için yoklama oluşturabilir."
       >
         <ButtonLink
           href={routes.admin.sectionCreate}
@@ -177,9 +249,24 @@ export default async function AdminSectionsPage({
           Ders grubu oluşturuldu.
         </div>
       ) : null}
+      {updated || deactivated || reactivated ? (
+        <div className="rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-700">
+          Ders grubu güncellendi.
+        </div>
+      ) : null}
       {assigned ? (
         <div className="rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-700">
-          Ders grubu güncellendi. Sorumlu kişi başarıyla atandı.
+          Öğretmen şubeye başarıyla atandı.
+        </div>
+      ) : null}
+      {unassigned ? (
+        <div className="rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-700">
+          Öğretmen ataması pasifleştirildi.
+        </div>
+      ) : null}
+      {alreadyInstructorAssigned ? (
+        <div className="rounded-md border border-sky-200 bg-sky-50 px-4 py-3 text-sm font-medium text-sky-700">
+          Bu öğretmen zaten bu şubeye atanmış.
         </div>
       ) : null}
       {studentAssigned ? (
@@ -200,7 +287,7 @@ export default async function AdminSectionsPage({
 
       <SectionCard
         title="Ders Grubu Listesi"
-        description="Oturumlar, atanmış sorumlu kişi üzerinden doğrulanır."
+        description="Öğretmenler yalnızca kendilerine atanmış şubeler için yoklama oluşturabilir."
       >
         <form
           action={routes.admin.sections}
@@ -212,7 +299,7 @@ export default async function AdminSectionsPage({
             <input
               name="q"
               defaultValue={query}
-              placeholder="Ders, sorumlu kişi veya grup ara"
+              placeholder="Ders, öğretmen veya şube ara"
               className="w-full bg-transparent outline-none placeholder:text-neutral-400"
             />
           </label>
@@ -233,11 +320,12 @@ export default async function AdminSectionsPage({
                   <tr>
                     <th className="px-4 py-3">Ders Grubu</th>
                     <th className="px-4 py-3">Ders / Kurs</th>
-                    <th className="px-4 py-3">Atanmış Sorumlu</th>
+                    <th className="px-4 py-3">Atanmış Öğretmenler</th>
                     <th className="px-4 py-3">Kayıtlı Öğrenciler</th>
                     <th className="px-4 py-3">Öğrenci Ata</th>
                     <th className="px-4 py-3">Yoklama Oturumları</th>
                     <th className="px-4 py-3">Durum</th>
+                    <th className="px-4 py-3">İşlem</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-neutral-100 bg-white">
@@ -250,14 +338,16 @@ export default async function AdminSectionsPage({
                         {section.course.code} · {section.course.title}
                       </td>
                       <td className="px-4 py-4 text-neutral-600">
-                        {section.instructorMembership ? (
-                          formatPerson(section.instructorMembership.user)
-                        ) : (
-                          <AssignResponsibleForm
+                        <div className="grid gap-2">
+                          <AssignedTeachersList
+                            sectionId={section.id}
+                            assignments={section.instructorAssignments}
+                          />
+                          <AssignTeacherForm
                             sectionId={section.id}
                             responsibleCandidates={options.responsibleCandidates}
                           />
-                        )}
+                        </div>
                       </td>
                       <td className="px-4 py-4 text-neutral-600">
                         {section._count.enrollments}
@@ -276,6 +366,35 @@ export default async function AdminSectionsPage({
                           label={section.isActive ? "Aktif" : "Pasif"}
                           tone={section.isActive ? "success" : "neutral"}
                         />
+                      </td>
+                      <td className="px-4 py-4">
+                        <div className="flex flex-wrap gap-2">
+                          <ButtonLink
+                            href={`/admin/sections/${section.id}/edit`}
+                            icon={<Pencil className="h-4 w-4" aria-hidden="true" />}
+                          >
+                            Düzenle
+                          </ButtonLink>
+                          <form
+                            action={
+                              section.isActive
+                                ? deactivateAdminSectionAction
+                                : reactivateAdminSectionAction
+                            }
+                          >
+                            <input
+                              type="hidden"
+                              name="sectionId"
+                              value={section.id}
+                            />
+                            <button
+                              type="submit"
+                              className="inline-flex h-9 items-center justify-center rounded-md border border-neutral-300 bg-white px-3 text-sm font-medium text-neutral-700 transition hover:border-neutral-400 hover:text-neutral-950"
+                            >
+                              {section.isActive ? "Pasifleştir" : "Tekrar Aktifleştir"}
+                            </button>
+                          </form>
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -305,19 +424,20 @@ export default async function AdminSectionsPage({
                   </div>
                   <dl className="mt-4 grid gap-3 text-sm">
                     <div>
-                      <dt className="text-neutral-500">Atanmış Sorumlu</dt>
+                      <dt className="text-neutral-500">Atanmış Öğretmenler</dt>
                       <dd className="mt-1 font-medium text-neutral-900">
-                        {formatPerson(section.instructorMembership?.user ?? null)}
-                        {!section.instructorMembership ? (
-                          <div className="mt-3">
-                            <AssignResponsibleForm
-                              sectionId={section.id}
-                              responsibleCandidates={
-                                options.responsibleCandidates
-                              }
-                            />
-                          </div>
-                        ) : null}
+                        <div className="grid gap-3">
+                          <AssignedTeachersList
+                            sectionId={section.id}
+                            assignments={section.instructorAssignments}
+                          />
+                          <AssignTeacherForm
+                            sectionId={section.id}
+                            responsibleCandidates={
+                              options.responsibleCandidates
+                            }
+                          />
+                        </div>
                       </dd>
                     </div>
                     <div className="grid grid-cols-2 gap-3">
@@ -348,6 +468,29 @@ export default async function AdminSectionsPage({
                       </dd>
                     </div>
                   </dl>
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    <ButtonLink
+                      href={`/admin/sections/${section.id}/edit`}
+                      icon={<Pencil className="h-4 w-4" aria-hidden="true" />}
+                    >
+                      Düzenle
+                    </ButtonLink>
+                    <form
+                      action={
+                        section.isActive
+                          ? deactivateAdminSectionAction
+                          : reactivateAdminSectionAction
+                      }
+                    >
+                      <input type="hidden" name="sectionId" value={section.id} />
+                      <button
+                        type="submit"
+                        className="inline-flex h-9 items-center justify-center rounded-md border border-neutral-300 bg-white px-3 text-sm font-medium text-neutral-700 transition hover:border-neutral-400 hover:text-neutral-950"
+                      >
+                        {section.isActive ? "Pasifleştir" : "Tekrar Aktifleştir"}
+                      </button>
+                    </form>
+                  </div>
                 </article>
               ))}
             </div>
@@ -362,7 +505,7 @@ export default async function AdminSectionsPage({
             description={
               query
                 ? "Farklı bir arama terimi deneyin veya aramayı temizleyin."
-                : "Yoklama oturumu oluşturmadan önce ders grubunu ve atanmış sorumlu kişiyi tanımlayın."
+                : "Yoklama oturumu oluşturmadan önce ders grubunu oluşturup öğretmene atayın."
             }
             icon={<BookOpen className="h-5 w-5" aria-hidden="true" />}
             actionHref={routes.admin.sectionCreate}
@@ -373,16 +516,16 @@ export default async function AdminSectionsPage({
 
       <SectionCard
         title="İlişki Modeli"
-        description="Öğrenciler sorumlu kişiye doğrudan değil, ders grubu kayıtları üzerinden bağlanır."
+        description="Öğrenciler ve öğretmenler ders grubu kayıtları üzerinden ilişkilendirilir."
       >
         <div className="grid gap-4 md:grid-cols-3">
           <div className="rounded-lg border border-neutral-200 bg-neutral-50 p-4">
             <BookOpen className="h-5 w-5 text-neutral-500" aria-hidden="true" />
             <p className="mt-3 text-sm font-medium text-neutral-950">
-              Sorumlu Ata
+              Öğretmen Ata
             </p>
             <p className="mt-1 text-sm leading-6 text-neutral-600">
-              Her ders grubunun bir atanmış sorumlu kişisi vardır.
+              Bir şubeye birden fazla aktif öğretmen atanabilir.
             </p>
           </div>
           <div className="rounded-lg border border-neutral-200 bg-neutral-50 p-4">
@@ -403,7 +546,7 @@ export default async function AdminSectionsPage({
               Oturum Görünürlüğü
             </p>
             <p className="mt-1 text-sm leading-6 text-neutral-600">
-              Öğretmen sorumluluğundaki oturumlar öğretmen panelinde görünür.
+              Atanmış öğretmenler şube oturumlarını kendi panelinde görür.
             </p>
           </div>
         </div>

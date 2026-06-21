@@ -49,11 +49,13 @@ const RESULT_CODES = new Set<StudentScanResultCode>([
   "success",
   "late_success",
   "already_checked_in",
+  "multi_device_attempt",
   "outside_geofence",
   "low_accuracy_location",
   "expired_token",
   "revoked_token",
   "invalid_token",
+  "suspicious_token_reuse",
   "session_closed",
   "session_not_active",
   "student_not_enrolled",
@@ -70,6 +72,26 @@ function normalizeCode(value: string | undefined): StudentScanResultCode {
   return RESULT_CODES.has(value as StudentScanResultCode)
     ? (value as StudentScanResultCode)
     : "error";
+}
+
+function getResultPanelClassName(tone: StatusTone) {
+  if (tone === "success") {
+    return "border-emerald-200 bg-emerald-50 text-emerald-900";
+  }
+
+  if (tone === "warning") {
+    return "border-amber-200 bg-amber-50 text-amber-900";
+  }
+
+  if (tone === "danger") {
+    return "border-rose-200 bg-rose-50 text-rose-900";
+  }
+
+  if (tone === "info") {
+    return "border-sky-200 bg-sky-50 text-sky-900";
+  }
+
+  return "border-neutral-200 bg-neutral-50 text-neutral-900";
 }
 
 function isLowAccuracyRejection(reason: string | null | undefined) {
@@ -164,6 +186,28 @@ function getResultContent(code: StudentScanResultCode): ResultContent {
       badge: "Zaten kayıtlı",
       tone: "neutral",
       icon: <Ban className="h-5 w-5" aria-hidden="true" />,
+    };
+  }
+
+  if (code === "multi_device_attempt") {
+    return {
+      title: "Farklı cihazdan tekrar deneme algılandı.",
+      description:
+        "Yoklamanız daha önce farklı bir cihazdan alınmış görünüyor. Lütfen öğretmeninizle iletişime geçin.",
+      badge: "Çoklu cihaz",
+      tone: "warning",
+      icon: <AlertTriangle className="h-5 w-5" aria-hidden="true" />,
+    };
+  }
+
+  if (code === "suspicious_token_reuse") {
+    return {
+      title: "QR kod güvenlik nedeniyle iptal edildi.",
+      description:
+        "Aynı QR kod kısa sürede çok fazla farklı kullanıcı veya cihaz tarafından denendi. Öğretmeninizden yeni QR kod isteyin.",
+      badge: "Şüpheli QR",
+      tone: "danger",
+      icon: <AlertTriangle className="h-5 w-5" aria-hidden="true" />,
     };
   }
 
@@ -453,7 +497,8 @@ export default async function StudentScanResultPage({
     (sessionId ? await getSessionResult(authContext, sessionId) : null) ??
     (token ? await getSessionResultByToken(authContext, token) : null);
   const resultCode = record
-    ? requestedCode === "already_checked_in"
+    ? requestedCode === "already_checked_in" ||
+      requestedCode === "multi_device_attempt"
       ? requestedCode
       : getCodeFromRecord(record.status, record.rejectionReason)
     : requestedCode;
@@ -508,8 +553,8 @@ export default async function StudentScanResultPage({
     <>
       <PageHeader
         eyebrow={authContext.activeOrganization.name}
-        title="Okutma Sonucu"
-        description="Yoklama katılım durumunuz."
+        title="Yoklama Sonucu"
+        description="Katılım durumunuz ve oturum doğrulama bilgileri."
       >
         <StatusBadge label={content.badge} tone={content.tone} />
       </PageHeader>
@@ -520,15 +565,19 @@ export default async function StudentScanResultPage({
         actions={<StatusBadge label={content.badge} tone={content.tone} />}
       >
         <div className="grid gap-5">
-          <div className="flex items-start gap-3 rounded-lg border border-neutral-200 bg-neutral-50 p-4">
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-white text-neutral-700 shadow-subtle">
+          <div
+            className={`flex items-start gap-4 rounded-lg border p-5 ${getResultPanelClassName(
+              content.tone,
+            )}`}
+          >
+            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-md bg-white text-current shadow-subtle">
               {content.icon}
             </div>
             <div>
-              <p className="text-base font-semibold text-neutral-950">
+              <p className="text-lg font-semibold text-current">
                 {content.title}
               </p>
-              <p className="mt-1 text-sm leading-6 text-neutral-600">
+              <p className="mt-2 text-sm leading-6 text-current opacity-85">
                 {content.description}
               </p>
             </div>

@@ -25,7 +25,30 @@ export type CreateAdminSectionResult =
       errors?: AdminSectionCreateFormErrors;
     };
 
+export type UpdateAdminSectionResult = CreateAdminSectionResult;
+
+export type SetAdminSectionActiveResult =
+  | {
+      ok: true;
+      sectionId: string;
+    }
+  | {
+      ok: false;
+      message: string;
+    };
+
 export type AssignAdminSectionInstructorResult =
+  | {
+      ok: true;
+      sectionId: string;
+      alreadyAssigned: boolean;
+    }
+  | {
+      ok: false;
+      message: string;
+    };
+
+export type UnassignAdminSectionInstructorResult =
   | {
       ok: true;
       sectionId: string;
@@ -77,6 +100,7 @@ export async function createAdminSection(
           where: {
             id: input.instructorMembershipId,
             organizationId,
+            role: MembershipRole.INSTRUCTOR,
           },
           select: {
             id: true,
@@ -104,10 +128,9 @@ export async function createAdminSection(
       if (!instructorMembership) {
         return {
           ok: false,
-          message: "Seçilen sorumlu kişi kurumunuza ait değil.",
+          message: "Seçilen öğretmen kurumunuza ait değil.",
           errors: {
-            instructorMembershipId:
-              "Seçilen sorumlu kişi kurumunuza ait değil.",
+            instructorMembershipId: "Seçilen öğretmen kurumunuza ait değil.",
           },
         };
       }
@@ -115,10 +138,9 @@ export async function createAdminSection(
       if (!isSectionResponsibleRole(instructorMembership.role)) {
         return {
           ok: false,
-          message: "Bu kullanıcı ders grubu sorumlusu olamaz.",
+          message: "Bu kullanıcı öğretmen olarak atanamaz.",
           errors: {
-            instructorMembershipId:
-              "Bu kullanıcı ders grubu sorumlusu olamaz.",
+            instructorMembershipId: "Bu kullanıcı öğretmen olarak atanamaz.",
           },
         };
       }
@@ -126,10 +148,10 @@ export async function createAdminSection(
       if (instructorMembership.user.status !== UserStatus.ACTIVE) {
         return {
           ok: false,
-          message: "Kurumunuzdaki aktif bir öğretmen veya yönetici seçin.",
+          message: "Kurumunuzdaki aktif bir öğretmen seçin.",
           errors: {
             instructorMembershipId:
-              "Kurumunuzdaki aktif bir öğretmen veya yönetici seçin.",
+              "Kurumunuzdaki aktif bir öğretmen seçin.",
           },
         };
       }
@@ -161,6 +183,29 @@ export async function createAdminSection(
             responsibleRole: instructorMembership.role,
             isActive: input.isActive,
           },
+        },
+      });
+
+      await tx.instructorSectionAssignment.upsert({
+        where: {
+          organizationId_instructorMembershipId_sectionId: {
+            organizationId,
+            instructorMembershipId: instructorMembership.id,
+            sectionId: section.id,
+          },
+        },
+        update: {
+          isActive: true,
+          assignedAt: new Date(),
+        },
+        create: {
+          organizationId,
+          instructorMembershipId: instructorMembership.id,
+          sectionId: section.id,
+          isActive: true,
+        },
+        select: {
+          id: true,
         },
       });
 
@@ -202,31 +247,38 @@ export async function createAdminSection(
   }
 }
 
-export async function assignAdminSectionInstructor(
+export async function updateAdminSection(
   authContext: AdminAuthContext,
-  input: {
-    sectionId: string;
-    instructorMembershipId: string;
-  },
-): Promise<AssignAdminSectionInstructorResult> {
+  sectionId: string,
+  input: ValidAdminSectionCreateInput,
+): Promise<UpdateAdminSectionResult> {
   const organizationId = getAdminOrganizationId(authContext);
-  const sectionId = input.sectionId.trim();
-  const instructorMembershipId = input.instructorMembershipId.trim();
+  const normalizedSectionId = sectionId.trim();
 
-  if (!sectionId || !instructorMembershipId) {
+  if (!normalizedSectionId) {
     return {
       ok: false,
-      message: "Ders grubu ve sorumlu kişi seçilmelidir.",
+      message: "Düzenlenecek ders grubu seçilmelidir.",
     };
   }
 
   try {
     return await db.$transaction(async (tx) => {
-      const [section, instructorMembership] = await Promise.all([
+      const [section, course, instructorMembership] = await Promise.all([
         tx.section.findFirst({
           where: {
-            id: sectionId,
+            id: normalizedSectionId,
             organizationId,
+          },
+          select: {
+            id: true,
+          },
+        }),
+        tx.course.findFirst({
+          where: {
+            id: input.courseId,
+            organizationId,
+            isActive: true,
           },
           select: {
             id: true,
@@ -234,8 +286,9 @@ export async function assignAdminSectionInstructor(
         }),
         tx.membership.findFirst({
           where: {
-            id: instructorMembershipId,
+            id: input.instructorMembershipId,
             organizationId,
+            role: MembershipRole.INSTRUCTOR,
           },
           select: {
             id: true,
@@ -257,28 +310,48 @@ export async function assignAdminSectionInstructor(
         };
       }
 
+      if (!course) {
+        return {
+          ok: false,
+          message: "Bu ders / kurs kurumunuza ait veya aktif değil.",
+          errors: {
+            courseId: "Aktif bir ders / kurs seçin.",
+          },
+        };
+      }
+
       if (!instructorMembership) {
         return {
           ok: false,
-          message: "Seçilen sorumlu kişi kurumunuza ait değil.",
+          message: "Seçilen öğretmen kurumunuza ait değil.",
+          errors: {
+            instructorMembershipId: "Seçilen öğretmen kurumunuza ait değil.",
+          },
         };
       }
 
       if (!isSectionResponsibleRole(instructorMembership.role)) {
         return {
           ok: false,
-          message: "Bu kullanıcı ders grubu sorumlusu olamaz.",
+          message: "Bu kullanıcı öğretmen olarak atanamaz.",
+          errors: {
+            instructorMembershipId: "Bu kullanıcı öğretmen olarak atanamaz.",
+          },
         };
       }
 
       if (instructorMembership.user.status !== UserStatus.ACTIVE) {
         return {
           ok: false,
-          message: "Kurumunuzdaki aktif bir öğretmen veya yönetici seçin.",
+          message: "Kurumunuzdaki aktif bir öğretmen seçin.",
+          errors: {
+            instructorMembershipId:
+              "Kurumunuzdaki aktif bir öğretmen seçin.",
+          },
         };
       }
 
-      await tx.section.update({
+      const updatedSection = await tx.section.update({
         where: {
           id_organizationId: {
             id: section.id,
@@ -286,7 +359,34 @@ export async function assignAdminSectionInstructor(
           },
         },
         data: {
+          courseId: course.id,
           instructorMembershipId: instructorMembership.id,
+          name: input.name,
+          code: input.code,
+          isActive: input.isActive,
+        },
+        select: {
+          id: true,
+        },
+      });
+
+      await tx.instructorSectionAssignment.upsert({
+        where: {
+          organizationId_instructorMembershipId_sectionId: {
+            organizationId,
+            instructorMembershipId: instructorMembership.id,
+            sectionId: updatedSection.id,
+          },
+        },
+        update: {
+          isActive: true,
+          assignedAt: new Date(),
+        },
+        create: {
+          organizationId,
+          instructorMembershipId: instructorMembership.id,
+          sectionId: updatedSection.id,
+          isActive: true,
         },
         select: {
           id: true,
@@ -297,13 +397,405 @@ export async function assignAdminSectionInstructor(
         data: {
           organizationId,
           actorUserId: authContext.user.id,
-          action: "section.responsible_assigned",
+          action: "section.updated",
           targetType: "Section",
-          targetId: section.id,
+          targetId: updatedSection.id,
           metadata: {
+            courseId: course.id,
             responsibleMembershipId: instructorMembership.id,
             responsibleUserId: instructorMembership.userId,
             responsibleRole: instructorMembership.role,
+            isActive: input.isActive,
+          },
+        },
+      });
+
+      return {
+        ok: true,
+        sectionId: updatedSection.id,
+      };
+    });
+  } catch (error) {
+    if (isUniqueConstraintError(error)) {
+      return {
+        ok: false,
+        message: "Bu ders grubu kodu kurumunuzda zaten kullanılıyor.",
+        errors: {
+          code: "Bu ders grubu kodu kurumunuzda zaten kullanılıyor.",
+        },
+      };
+    }
+
+    return {
+      ok: false,
+      message: "Ders grubu şu anda güncellenemedi. Lütfen tekrar deneyin.",
+    };
+  }
+}
+
+export async function setAdminSectionActive(
+  authContext: AdminAuthContext,
+  sectionId: string,
+  isActive: boolean,
+): Promise<SetAdminSectionActiveResult> {
+  const organizationId = getAdminOrganizationId(authContext);
+  const normalizedSectionId = sectionId.trim();
+
+  if (!normalizedSectionId) {
+    return {
+      ok: false,
+      message: "Güncellenecek ders grubu seçilmelidir.",
+    };
+  }
+
+  try {
+    const section = await db.$transaction(async (tx) => {
+      const existingSection = await tx.section.findFirst({
+        where: {
+          id: normalizedSectionId,
+          organizationId,
+        },
+        select: {
+          id: true,
+        },
+      });
+
+      if (!existingSection) {
+        return null;
+      }
+
+      const updatedSection = await tx.section.update({
+        where: {
+          id_organizationId: {
+            id: existingSection.id,
+            organizationId,
+          },
+        },
+        data: {
+          isActive,
+        },
+        select: {
+          id: true,
+        },
+      });
+
+      await tx.auditLog.create({
+        data: {
+          organizationId,
+          actorUserId: authContext.user.id,
+          action: isActive ? "section.reactivated" : "section.deactivated",
+          targetType: "Section",
+          targetId: updatedSection.id,
+        },
+      });
+
+      return updatedSection;
+    });
+
+    if (!section) {
+      return {
+        ok: false,
+        message: "Ders grubu bulunamadı.",
+      };
+    }
+
+    return {
+      ok: true,
+      sectionId: section.id,
+    };
+  } catch {
+    return {
+      ok: false,
+      message: "Ders grubu durumu güncellenemedi.",
+    };
+  }
+}
+
+export async function assignAdminSectionInstructor(
+  authContext: AdminAuthContext,
+  input: {
+    sectionId: string;
+    instructorMembershipId: string;
+  },
+): Promise<AssignAdminSectionInstructorResult> {
+  const organizationId = getAdminOrganizationId(authContext);
+  const sectionId = input.sectionId.trim();
+  const instructorMembershipId = input.instructorMembershipId.trim();
+
+  if (!sectionId || !instructorMembershipId) {
+    return {
+      ok: false,
+      message: "Ders grubu ve öğretmen seçilmelidir.",
+    };
+  }
+
+  try {
+    return await db.$transaction(async (tx) => {
+      const [section, instructorMembership, existingAssignment] =
+        await Promise.all([
+          tx.section.findFirst({
+            where: {
+              id: sectionId,
+              organizationId,
+              isActive: true,
+            },
+            select: {
+              id: true,
+              instructorMembershipId: true,
+            },
+          }),
+          tx.membership.findFirst({
+            where: {
+              id: instructorMembershipId,
+              organizationId,
+              role: MembershipRole.INSTRUCTOR,
+            },
+            select: {
+              id: true,
+              userId: true,
+              role: true,
+              user: {
+                select: {
+                  status: true,
+                },
+              },
+            },
+          }),
+          tx.instructorSectionAssignment.findUnique({
+            where: {
+              organizationId_instructorMembershipId_sectionId: {
+                organizationId,
+                instructorMembershipId,
+                sectionId,
+              },
+            },
+            select: {
+              id: true,
+              isActive: true,
+            },
+          }),
+        ]);
+
+      if (!section) {
+        return {
+          ok: false,
+          message: "Aktif ders grubu bulunamadı.",
+        };
+      }
+
+      if (!instructorMembership) {
+        return {
+          ok: false,
+          message: "Seçilen öğretmen kurumunuza ait değil.",
+        };
+      }
+
+      if (!isSectionResponsibleRole(instructorMembership.role)) {
+        return {
+          ok: false,
+          message: "Bu kullanıcı öğretmen olarak atanamaz.",
+        };
+      }
+
+      if (instructorMembership.user.status !== UserStatus.ACTIVE) {
+        return {
+          ok: false,
+          message: "Kurumunuzdaki aktif bir öğretmen seçin.",
+        };
+      }
+
+      const alreadyAssigned = Boolean(existingAssignment?.isActive);
+
+      await tx.instructorSectionAssignment.upsert({
+        where: {
+          organizationId_instructorMembershipId_sectionId: {
+            organizationId,
+            instructorMembershipId: instructorMembership.id,
+            sectionId: section.id,
+          },
+        },
+        update: {
+          isActive: true,
+          assignedAt: new Date(),
+        },
+        create: {
+          organizationId,
+          instructorMembershipId: instructorMembership.id,
+          sectionId: section.id,
+          isActive: true,
+        },
+        select: {
+          id: true,
+        },
+      });
+
+      if (!section.instructorMembershipId) {
+        await tx.section.update({
+          where: {
+            id_organizationId: {
+              id: section.id,
+              organizationId,
+            },
+          },
+          data: {
+            instructorMembershipId: instructorMembership.id,
+          },
+          select: {
+            id: true,
+          },
+        });
+      }
+
+      await tx.auditLog.create({
+        data: {
+          organizationId,
+          actorUserId: authContext.user.id,
+          action: existingAssignment?.isActive
+            ? "section.instructor_assignment_duplicate"
+            : "section.instructor_assigned",
+          targetType: "Section",
+          targetId: section.id,
+          metadata: {
+            instructorMembershipId: instructorMembership.id,
+            instructorUserId: instructorMembership.userId,
+            instructorRole: instructorMembership.role,
+            reactivated: Boolean(
+              existingAssignment && !existingAssignment.isActive,
+            ),
+          },
+        },
+      });
+
+      return {
+        ok: true,
+        sectionId: section.id,
+        alreadyAssigned,
+      };
+    });
+  } catch {
+    return {
+      ok: false,
+      message: "Öğretmen ataması şu anda yapılamadı.",
+    };
+  }
+}
+
+export async function unassignAdminSectionInstructor(
+  authContext: AdminAuthContext,
+  input: {
+    sectionId: string;
+    instructorMembershipId: string;
+  },
+): Promise<UnassignAdminSectionInstructorResult> {
+  const organizationId = getAdminOrganizationId(authContext);
+  const sectionId = input.sectionId.trim();
+  const instructorMembershipId = input.instructorMembershipId.trim();
+
+  if (!sectionId || !instructorMembershipId) {
+    return {
+      ok: false,
+      message: "Ders grubu ve öğretmen seçilmelidir.",
+    };
+  }
+
+  try {
+    return await db.$transaction(async (tx) => {
+      const [section, assignment] = await Promise.all([
+        tx.section.findFirst({
+          where: {
+            id: sectionId,
+            organizationId,
+          },
+          select: {
+            id: true,
+            instructorMembershipId: true,
+          },
+        }),
+        tx.instructorSectionAssignment.findUnique({
+          where: {
+            organizationId_instructorMembershipId_sectionId: {
+              organizationId,
+              instructorMembershipId,
+              sectionId,
+            },
+          },
+          select: {
+            id: true,
+            isActive: true,
+          },
+        }),
+      ]);
+
+      if (!section) {
+        return {
+          ok: false,
+          message: "Ders grubu bulunamadı.",
+        };
+      }
+
+      if (!assignment || !assignment.isActive) {
+        return {
+          ok: true,
+          sectionId: section.id,
+        };
+      }
+
+      await tx.instructorSectionAssignment.update({
+        where: {
+          id_organizationId: {
+            id: assignment.id,
+            organizationId,
+          },
+        },
+        data: {
+          isActive: false,
+        },
+        select: {
+          id: true,
+        },
+      });
+
+      if (section.instructorMembershipId === instructorMembershipId) {
+        const nextAssignment = await tx.instructorSectionAssignment.findFirst({
+          where: {
+            organizationId,
+            sectionId: section.id,
+            isActive: true,
+          },
+          orderBy: {
+            assignedAt: "asc",
+          },
+          select: {
+            instructorMembershipId: true,
+          },
+        });
+
+        await tx.section.update({
+          where: {
+            id_organizationId: {
+              id: section.id,
+              organizationId,
+            },
+          },
+          data: {
+            instructorMembershipId:
+              nextAssignment?.instructorMembershipId ?? null,
+          },
+          select: {
+            id: true,
+          },
+        });
+      }
+
+      await tx.auditLog.create({
+        data: {
+          organizationId,
+          actorUserId: authContext.user.id,
+          action: "section.instructor_assignment_deactivated",
+          targetType: "Section",
+          targetId: section.id,
+          metadata: {
+            instructorMembershipId,
           },
         },
       });
@@ -316,7 +808,7 @@ export async function assignAdminSectionInstructor(
   } catch {
     return {
       ok: false,
-      message: "Sorumlu kişi ataması şu anda yapılamadı.",
+      message: "Öğretmen ataması pasifleştirilemedi.",
     };
   }
 }

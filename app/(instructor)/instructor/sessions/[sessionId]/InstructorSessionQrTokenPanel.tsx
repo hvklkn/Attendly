@@ -144,16 +144,16 @@ function QrVisualCard({
       tabIndex={token ? 0 : undefined}
       onClick={token ? onOpen : undefined}
       onKeyDown={handleKeyDown}
-      className="grid gap-4 rounded-lg border border-neutral-200 bg-white p-4 shadow-subtle outline-none transition hover:border-neutral-300 focus-visible:ring-2 focus-visible:ring-neutral-950 sm:grid-cols-[minmax(220px,280px)_1fr]"
+      className="grid gap-5 rounded-lg border border-neutral-200 bg-white p-4 shadow-subtle outline-none transition hover:border-neutral-300 focus-visible:ring-2 focus-visible:ring-neutral-950 lg:grid-cols-[minmax(320px,420px)_1fr]"
     >
-      <div className="flex min-h-72 items-center justify-center rounded-md bg-neutral-50 p-5">
+      <div className="flex min-h-80 items-center justify-center rounded-md border border-neutral-100 bg-neutral-50 p-5 sm:min-h-96">
         {token ? (
           <QRCodeSVG
             value={token.scanUrl}
-            size={320}
+            size={420}
             level="M"
             marginSize={3}
-            className="h-full max-h-64 w-full max-w-64"
+            className="h-full max-h-80 w-full max-w-80 sm:max-h-96 sm:max-w-96"
             title="Canlı QR kodu"
           />
         ) : (
@@ -172,10 +172,20 @@ function QrVisualCard({
             <p className="text-base font-semibold text-neutral-950">
               Canlı QR Kodu
             </p>
-            <StatusBadge
-              label={isAutoRotating ? "Otomatik Yenileme: Aktif" : "Otomatik Yenileme: Kapalı"}
-              tone={isAutoRotating ? "success" : "neutral"}
-            />
+            <div className="flex flex-wrap gap-2">
+              <StatusBadge
+                label="QR her 60 saniyede yenilenir"
+                tone="info"
+              />
+              <StatusBadge
+                label={
+                  isAutoRotating
+                    ? "Otomatik Yenileme: Aktif"
+                    : "Otomatik Yenileme: Kapalı"
+                }
+                tone={isAutoRotating ? "success" : "neutral"}
+              />
+            </div>
           </div>
 
           <div className="grid gap-3 sm:grid-cols-2">
@@ -199,7 +209,7 @@ function QrVisualCard({
             </div>
           </div>
 
-          <p className="text-sm leading-6 text-neutral-600">
+          <p className="rounded-md border border-sky-200 bg-sky-50 px-3 py-2 text-sm leading-6 text-sky-900">
             {token
               ? "Yeni QR otomatik oluşturulacak. Bu QR kodu 60 saniyede bir otomatik yenilenir."
               : "Öğrencilerin okutacağı QR kodunu göstermek için döngüyü başlatın."}
@@ -651,15 +661,6 @@ export function InstructorSessionQrTokenPanel({
               </div>
               <code className="block break-all rounded-md bg-neutral-950 px-3 py-2 text-xs leading-5 text-white">
                 {state.issuedToken.scanUrl}
-              </code>
-            </div>
-
-            <div>
-              <p className="mb-2 text-sm font-medium text-neutral-700">
-                Ham QR Değeri
-              </p>
-              <code className="block break-all rounded-md bg-neutral-100 px-3 py-2 text-xs leading-5 text-neutral-900">
-                {state.issuedToken.rawToken}
               </code>
             </div>
           </div>

@@ -101,6 +101,10 @@ enum AttendanceAlertType {
   STUDENT_NOT_ENROLLED
   SESSION_CLOSED_ATTEMPT
   INVALID_TOKEN_ATTEMPT
+  MULTI_DEVICE_ATTEMPT
+  SUSPICIOUS_TOKEN_REUSE
+  TOKEN_REPLACED_BY_NEW_QR
+  DEVICE_REGISTERED
   MISSED_MID_SESSION_CHECK
   LOCATION_PERMISSION_LOST
   SUSPICIOUS_RECHECK
@@ -122,38 +126,44 @@ model Organization {
   createdAt DateTime           @default(now())
   updatedAt DateTime           @updatedAt
 
-  memberships        Membership[]
-  rooms              Room[]
-  courses            Course[]
-  sections           Section[]
-  enrollments        Enrollment[]
-  attendanceSessions AttendanceSession[]
-  qrTokens           QRToken[]
-  attendanceRecords  AttendanceRecord[]
-  presenceChecks     PresenceCheck[]
-  attendanceAlerts   AttendanceAlert[]
-  auditLogs          AuditLog[]
-  deviceSessions     DeviceSession[]
+  memberships         Membership[]
+  rooms               Room[]
+  courses             Course[]
+  sections            Section[]
+  enrollments         Enrollment[]
+  attendanceSessions  AttendanceSession[]
+  qrTokens            QRToken[]
+  attendanceRecords   AttendanceRecord[]
+  presenceChecks      PresenceCheck[]
+  attendanceAlerts    AttendanceAlert[]
+  auditLogs           AuditLog[]
+  deviceSessions      DeviceSession[]
+  attendanceDevices   AttendanceDevice[]
+  sectionAssignments  InstructorSectionAssignment[]
+  passwordResetTokens PasswordResetToken[]
 
   @@index([status])
   @@map("organizations")
 }
 
 model User {
-  id           String     @id @default(cuid())
-  email        String     @unique
-  name         String?
-  passwordHash String?
-  status       UserStatus @default(ACTIVE)
-  createdAt    DateTime   @default(now())
-  updatedAt    DateTime   @updatedAt
+  id                 String     @id @default(cuid())
+  email              String     @unique
+  name               String?
+  passwordHash       String?
+  mustChangePassword Boolean    @default(false)
+  status             UserStatus @default(ACTIVE)
+  createdAt          DateTime   @default(now())
+  updatedAt          DateTime   @updatedAt
 
-  memberships       Membership[]
-  auditLogs         AuditLog[]         @relation("AuditLogActor")
-  deviceSessions    DeviceSession[]
-  attendanceRecords AttendanceRecord[] @relation("AttendanceRecordStudentUser")
-  presenceChecks    PresenceCheck[]    @relation("PresenceCheckStudentUser")
-  attendanceAlerts  AttendanceAlert[]  @relation("AttendanceAlertStudentUser")
+  memberships         Membership[]
+  passwordResetTokens PasswordResetToken[]
+  auditLogs           AuditLog[]           @relation("AuditLogActor")
+  deviceSessions      DeviceSession[]
+  attendanceRecords   AttendanceRecord[]   @relation("AttendanceRecordStudentUser")
+  presenceChecks      PresenceCheck[]      @relation("PresenceCheckStudentUser")
+  attendanceAlerts    AttendanceAlert[]    @relation("AttendanceAlertStudentUser")
+  attendanceDevices   AttendanceDevice[]   @relation("AttendanceDeviceUser")
 
   @@index([status])
   @@map("users")
@@ -164,25 +174,28 @@ model Membership {
   organizationId String
   userId         String
   role           MembershipRole
+  studentNo      String?
   createdAt      DateTime       @default(now())
   updatedAt      DateTime       @updatedAt
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   user         User         @relation(fields: [userId], references: [id], onDelete: NoAction)
 
-  instructedSections        Section[]           @relation("SectionInstructorMembership")
-  enrollments               Enrollment[]        @relation("EnrollmentStudentMembership")
-  createdAttendanceSessions AttendanceSession[] @relation("AttendanceSessionCreatorMembership")
-  createdQRTokens           QRToken[]           @relation("QRTokenCreatorMembership")
-  attendanceRecords         AttendanceRecord[]  @relation("AttendanceRecordStudentMembership")
-  presenceChecks            PresenceCheck[]     @relation("PresenceCheckStudentMembership")
-  attendanceAlerts          AttendanceAlert[]   @relation("AttendanceAlertStudentMembership")
-  resolvedAttendanceAlerts  AttendanceAlert[]   @relation("AttendanceAlertResolverMembership")
+  instructedSections        Section[]                     @relation("SectionInstructorMembership")
+  enrollments               Enrollment[]                  @relation("EnrollmentStudentMembership")
+  createdAttendanceSessions AttendanceSession[]           @relation("AttendanceSessionCreatorMembership")
+  createdQRTokens           QRToken[]                     @relation("QRTokenCreatorMembership")
+  attendanceRecords         AttendanceRecord[]            @relation("AttendanceRecordStudentMembership")
+  presenceChecks            PresenceCheck[]               @relation("PresenceCheckStudentMembership")
+  attendanceAlerts          AttendanceAlert[]             @relation("AttendanceAlertStudentMembership")
+  resolvedAttendanceAlerts  AttendanceAlert[]             @relation("AttendanceAlertResolverMembership")
+  sectionAssignments        InstructorSectionAssignment[] @relation("InstructorSectionAssignmentMembership")
 
   @@unique([organizationId, userId])
   @@unique([id, organizationId])
   @@unique([id, organizationId, userId])
   @@index([organizationId, role])
+  @@index([organizationId, studentNo])
   @@index([userId])
   @@map("memberships")
 }
@@ -246,8 +259,9 @@ model Section {
   course               Course       @relation(fields: [courseId, organizationId], references: [id, organizationId], onDelete: NoAction)
   instructorMembership Membership?  @relation("SectionInstructorMembership", fields: [instructorMembershipId, organizationId], references: [id, organizationId], onDelete: NoAction)
 
-  enrollments        Enrollment[]
-  attendanceSessions AttendanceSession[]
+  enrollments           Enrollment[]
+  attendanceSessions    AttendanceSession[]
+  instructorAssignments InstructorSectionAssignment[] @relation("InstructorSectionAssignmentSection")
 
   @@unique([organizationId, code])
   @@unique([id, organizationId])
@@ -255,6 +269,27 @@ model Section {
   @@index([organizationId, instructorMembershipId])
   @@index([organizationId, isActive])
   @@map("sections")
+}
+
+model InstructorSectionAssignment {
+  id                     String   @id @default(cuid())
+  organizationId         String
+  instructorMembershipId String
+  sectionId              String
+  isActive               Boolean  @default(true)
+  assignedAt             DateTime @default(now())
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+
+  organization         Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  instructorMembership Membership   @relation("InstructorSectionAssignmentMembership", fields: [instructorMembershipId, organizationId], references: [id, organizationId], onDelete: NoAction)
+  section              Section      @relation("InstructorSectionAssignmentSection", fields: [sectionId, organizationId], references: [id, organizationId], onDelete: NoAction)
+
+  @@unique([organizationId, instructorMembershipId, sectionId])
+  @@unique([id, organizationId])
+  @@index([organizationId, instructorMembershipId, isActive])
+  @@index([organizationId, sectionId, isActive])
+  @@map("instructor_section_assignments")
 }
 
 model Enrollment {
@@ -465,6 +500,27 @@ model AuditLog {
   @@map("audit_logs")
 }
 
+model PasswordResetToken {
+  id             String    @id @default(cuid())
+  organizationId String
+  userId         String
+  tokenHash      String    @unique
+  expiresAt      DateTime
+  usedAt         DateTime?
+  revokedAt      DateTime?
+  requestedAt    DateTime  @default(now())
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, userId, createdAt])
+  @@index([tokenHash])
+  @@index([expiresAt])
+  @@map("password_reset_tokens")
+}
+
 model DeviceSession {
   id               String    @id @default(cuid())
   organizationId   String
@@ -486,4 +542,24 @@ model DeviceSession {
   @@index([organizationId, expiresAt])
   @@index([organizationId, lastSeenAt])
   @@map("device_sessions")
+}
+
+model AttendanceDevice {
+  id               String   @id @default(cuid())
+  organizationId   String
+  userId           String
+  fingerprintHash  String
+  userAgentSummary String?
+  firstSeenAt      DateTime @default(now())
+  lastSeenAt       DateTime @default(now())
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user         User         @relation("AttendanceDeviceUser", fields: [userId], references: [id], onDelete: NoAction)
+
+  @@unique([organizationId, userId, fingerprintHash])
+  @@index([organizationId, userId, lastSeenAt])
+  @@index([organizationId, fingerprintHash])
+  @@map("attendance_devices")
 }

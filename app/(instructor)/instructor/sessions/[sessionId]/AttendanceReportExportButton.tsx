@@ -10,6 +10,7 @@ export type AttendanceReportCsvRow = {
   checkedInAt: string;
   distance: string;
   locationVerification: string;
+  securityReason: string;
 };
 
 type AttendanceReportExportButtonProps = {
@@ -19,12 +20,13 @@ type AttendanceReportExportButtonProps = {
 
 const CSV_HEADERS: Array<[keyof AttendanceReportCsvRow, string]> = [
   ["studentName", "Öğrenci adı"],
-  ["email", "Email"],
+  ["email", "E-posta"],
   ["courseSection", "Ders/Şube"],
   ["status", "Durum"],
   ["checkedInAt", "Giriş zamanı"],
   ["distance", "Mesafe"],
   ["locationVerification", "Konum doğrulama sonucu"],
+  ["securityReason", "Güvenlik nedeni"],
 ];
 
 function escapeCsvCell(value: string) {
@@ -71,7 +73,7 @@ export function AttendanceReportExportButton({
       className="inline-flex h-9 items-center justify-center gap-2 rounded-md border border-neutral-300 bg-white px-3 text-sm font-medium text-neutral-700 transition hover:border-neutral-400 hover:text-neutral-950 disabled:cursor-not-allowed disabled:border-neutral-200 disabled:bg-neutral-100 disabled:text-neutral-400"
     >
       <Download className="h-4 w-4" aria-hidden="true" />
-      CSV Export
+      CSV İndir
     </button>
   );
 }

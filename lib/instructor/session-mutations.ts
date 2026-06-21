@@ -5,6 +5,10 @@ import {
   type InstructorAuthContext,
 } from "@/lib/instructor/auth";
 import {
+  getInstructorAssignedSectionWhere,
+  getInstructorAssignedSessionWhere,
+} from "@/lib/instructor/assignment-scope";
+import {
   AttendanceSessionGeofenceSource,
   AttendanceSessionStatus,
 } from "@/lib/generated/prisma/enums";
@@ -95,8 +99,10 @@ export async function createInstructorAttendanceSession(
     const section = await db.section.findFirst({
       where: {
         id: input.sectionId,
-        organizationId,
-        instructorMembershipId: authContext.membership.id,
+        ...getInstructorAssignedSectionWhere(authContext, {
+          activeSectionOnly: true,
+          activeCourseOnly: true,
+        }),
       },
       select: {
         id: true,
@@ -258,15 +264,7 @@ export async function startInstructorAttendanceSession(
 
   try {
     const session = await db.attendanceSession.findFirst({
-      where: {
-        id: normalizedSessionId,
-        organizationId,
-        section: {
-          is: {
-            instructorMembershipId: authContext.membership.id,
-          },
-        },
-      },
+      where: getInstructorAssignedSessionWhere(authContext, normalizedSessionId),
       select: {
         id: true,
         status: true,
@@ -337,15 +335,7 @@ export async function closeInstructorAttendanceSession(
 
   try {
     const session = await db.attendanceSession.findFirst({
-      where: {
-        id: normalizedSessionId,
-        organizationId,
-        section: {
-          is: {
-            instructorMembershipId: authContext.membership.id,
-          },
-        },
-      },
+      where: getInstructorAssignedSessionWhere(authContext, normalizedSessionId),
       select: {
         id: true,
         status: true,
